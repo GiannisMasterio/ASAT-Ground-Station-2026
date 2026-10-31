@@ -23,7 +23,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ThrustStandGUI.cpp">
+    <ClCompile Include="GcsGUI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="qcustomplot.cpp">
@@ -32,15 +32,12 @@
     <ClCompile Include="graphcontainer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mqttclient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="modehandler.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="mqttclient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="containers.cpp">
@@ -48,13 +45,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="ThrustStandGUI.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="modehandler.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="mqttclient.h">
+    <QtMoc Include="GcsGUI.h">
       <Filter>Header Files</Filter>
     </QtMoc>
     <QtMoc Include="containers.h">
@@ -66,12 +57,30 @@
     <QtMoc Include="graphcontainer.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="audiohandler.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="mqttclient.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="Gauge.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="BatteryWidget.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="BigBatteryWidget.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="constants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="modernui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

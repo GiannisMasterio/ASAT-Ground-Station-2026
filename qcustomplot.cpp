@@ -16680,7 +16680,8 @@ void QCPColorGradient::setNanColor(const QColor &color)
   the color map. A preset that has this property is \ref gpHues.
   
   In practice, using periodic color gradients makes sense when the data corresponds to a periodic
-  dimension, such as an angle or a phase. If this is not the case, the color encoding might become
+  dimension, such as an 
+  or a phase. If this is not the case, the color encoding might become
   ambiguous, because multiple different data values are shown as the same color.
 */
 void QCPColorGradient::setPeriodic(bool enabled)

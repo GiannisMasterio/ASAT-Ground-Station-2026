@@ -3,15 +3,14 @@
 
 #include <QWidget>
 #include <QFrame>
-#include <QString>
-#include "modehandler.h"
-
+#include "Gauge.h"
+#include "BigBatteryWidget.h"
 
 class QLabel;
 class QProgressBar;
 class QCheckBox;
 class QPushButton;
-class ThrustStandGUI;
+class GcsGUI;
 
 class Containers : public QFrame
 {
@@ -19,17 +18,15 @@ class Containers : public QFrame
 
 public:
     explicit Containers(const QString& title, int titleSize, const QString& titleColor,
-        double initialValue, bool hasBar, const QString& variableQuantity, ThrustStandGUI* guiMaster,
+        double initialValue, bool hasBar,  GcsGUI* guiMaster,
         QWidget* parent = nullptr);
+
 
     ~Containers() override = default;
 
-    ModeHandler* getModeHandler() const { return mode_handler; }
-    // ειναι για να επιστρεψει pointer στο αντικειμενο και να καλεσω ετσι καποιο method του
 
 public slots:
-    void updateData(double newValue, double currentRpm);
-    void handleModeChange(const QString& newMode);
+    void updateData(double newValue);
 
 private:
     QString title_text;
@@ -39,7 +36,6 @@ private:
     QString unit;
     bool has_bar;
     QString quantity;
-    QString function_mode;
 
     double low_bound = 2.0;
     double high_bound = 5.0;
@@ -49,20 +45,20 @@ private:
     QString high_color;
 
     QLabel* title_label;
-    QLabel* value_label;
+    QLabel* value_label = nullptr;
     QProgressBar* progress_bar = nullptr;
 
     QWidget* control_frame = nullptr;
     QCheckBox* toggle_switch = nullptr;
     QPushButton* slider_opener_button = nullptr;
 
-    ModeHandler* mode_handler = nullptr;
-    ThrustStandGUI* m_guiMaster;
+    GcsGUI* m_guiMaster;
+    
+    Gauge* mainGauge = nullptr; 
+    BigBatteryWidget* bigBatteryWidget = nullptr;
 
     void checkBoundsAndSetColor(double currentValue);
     void design();
-    void setupControlElements();
-    double getThrottlePercentage() const;
 };
 
 #endif 

@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QFont>
 
+int title_label_size = 25;
+
 GraphContainer::GraphContainer(const QString& title, const QString& unit, QWidget* parent)
     : QFrame(parent), m_unit(unit) {
 
@@ -19,7 +21,7 @@ void GraphContainer::setupUI(const QString& title) {
 
     titleLabel = new QLabel(title, this);
     titleLabel->setAlignment(Qt::AlignCenter);
-    titleLabel->setFont(QFont("Arial", 20, QFont::Bold));
+    titleLabel->setFont(QFont("Arial", title_label_size, QFont::Bold));
     titleLabel->setStyleSheet("color: white; border: none;");
     layout->addWidget(titleLabel);
 
@@ -32,6 +34,7 @@ void GraphContainer::setupUI(const QString& title) {
     valueLabel->setPositionAlignment(Qt::AlignTop | Qt::AlignLeft);
     valueLabel->position->setType(QCPItemPosition::ptAxisRectRatio);
     valueLabel->position->setCoords(0.02, 0.02);
+
     valueLabel->setText("0.00 " + m_unit);
     valueLabel->setFont(QFont("Arial", 18, QFont::Bold));
     valueLabel->setColor(Qt::white);
@@ -39,7 +42,12 @@ void GraphContainer::setupUI(const QString& title) {
 
 
     QPen axisPen(Qt::white);
-    customPlot->xAxis->setBasePen(axisPen);
+    customPlot->xAxis->setLabelColor(Qt::white);
+    customPlot->xAxis->setTickLabelColor(Qt::white);
+    customPlot->xAxis->setBasePen(QPen(Qt::white));
+    customPlot->xAxis->setTickPen(QPen(Qt::white));
+    customPlot->xAxis->setSubTickPen(QPen(Qt::white));
+
     customPlot->yAxis->setBasePen(axisPen);
     customPlot->xAxis->setTickLabelColor(Qt::white);
     customPlot->yAxis->setTickLabelColor(Qt::white);
@@ -65,12 +73,35 @@ void GraphContainer::addDataPoint(double time, double value) {
     customPlot->replot();
 }
 
-void GraphContainer::setFullData(const QVector<double>& timeData, const QVector<double>& valueData) {
-    if (!customPlot || timeData.isEmpty()) return;
+void GraphContainer::setFullData(const QVector<double>& xData, const QVector<double>& yData) {
+    if (!customPlot || xData.isEmpty()) return;
 
-    customPlot->graph(0)->setData(timeData, valueData);
-    customPlot->graph(0)->rescaleValueAxis(true);
+    customPlot->graph(0)->setData(xData, yData);
 
-    customPlot->xAxis->setRange(timeData.last(), 10, Qt::AlignRight);
+    customPlot->graph(0)->rescaleAxes();
+
+    customPlot->xAxis->scaleRange(1.1, customPlot->xAxis->range().center());
+    customPlot->yAxis->scaleRange(1.1, customPlot->yAxis->range().center());
+
+    valueLabel->setText(QString::number(yData.last(), 'f', 2) + " " + m_unit);
+
     customPlot->replot();
+}
+
+void GraphContainer::setTitle(const QString& title) {
+    if (titleLabel) {
+        titleLabel->setText(title); 
+    }
+    if (customPlot) {
+        customPlot->yAxis->setLabel(title); 
+        customPlot->replot();
+    }
+}
+
+void GraphContainer::setAxisLabels(const QString& xLabel, const QString& yLabel) {
+    if (customPlot) {
+        customPlot->xAxis->setLabel(xLabel);
+        customPlot->yAxis->setLabel(yLabel);
+        customPlot->replot();
+    }
 }

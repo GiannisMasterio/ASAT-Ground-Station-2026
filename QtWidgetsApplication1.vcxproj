@@ -16,6 +16,7 @@
     <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">10.0</WindowsTargetPlatformVersion>
     <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\QtMsBuild</QtMsBuild>
+    <ProjectName>ASAT GCS</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
@@ -37,12 +38,12 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>qt</QtInstall>
-    <QtModules>core;gui;widgets;serialport;printsupport</QtModules>
+    <QtModules>core;gui;widgets;serialport;printsupport;multimedia</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall>qt</QtInstall>
-    <QtModules>core;gui;widgets;printsupport;serialport</QtModules>
+    <QtModules>core;gui;qml;quick;widgets;3dcore;3danimation;3dextras;3dinput;3dlogic;3drender;opengl;multimedia;printsupport;quickwidgets;serialport;positioning;3dquick;quick3d</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
@@ -121,25 +122,27 @@ Qt6Mqtt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <QtMoc Include="ThrustStandGUI.h" />
+    <QtMoc Include="GcsGUI.h" />
+    <QtMoc Include="BigBatteryWidget.h" />
     <ClCompile Include="containers.cpp" />
+    <QtMoc Include="Gauge.h" />
     <ClCompile Include="graphcontainer.cpp" />
-    <ClCompile Include="modehandler.cpp" />
     <ClCompile Include="mqttclient.cpp" />
     <ClCompile Include="qcustomplot.cpp" />
-    <ClCompile Include="ThrustStandGUI.cpp" />
+    <ClCompile Include="GcsGUI.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="modehandler.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <QtMoc Include="mqttclient.h" />
-  </ItemGroup>
-  <ItemGroup>
+    <QtMoc Include="audiohandler.h">
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">"$(QtMsBuild)\qt_vars.target" "$(QtMsBuild)\qt_moc.target"</Command>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </QtMoc>
+    <QtMoc Include="BatteryWidget.h" />
     <ClInclude Include="constants.h" />
     <QtMoc Include="qcustomplot.h" />
     <QtMoc Include="graphcontainer.h" />
+    <QtMoc Include="mqttclient.h" />
+    <ClInclude Include="modernui.h" />
     <ClInclude Include="resource.h" />
     <QtMoc Include="containers.h" />
   </ItemGroup>

@@ -1,6 +1,11 @@
 #include "mqttclient.h"
 #include <QDebug>
 #include <QtMqtt/QMqttTopicName> // Χρειάζεται για το publish
+#include <QSslConfiguration>
+
+// apaiteitai ssl kryptografhsh
+constexpr const char* username = "asatpi";
+constexpr const char* password = "asat";
 
 MqttClient::MqttClient(const QString& host, quint16 port, const QString& receiveTopic, const QString& sendTopic, QObject* parent)
     : QObject(parent),
@@ -20,8 +25,18 @@ MqttClient::MqttClient(const QString& host, quint16 port, const QString& receive
 
 void MqttClient::connectToBroker()
 {
+    m_client->setUsername(username);
+    m_client->setPassword(password);
+
+    // 2. Ενεργοποίησε το SSL/TLS 
+    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+
+    // Αν έχεις θέμα με τα certificates, δοκίμασε να βάλεις (προαιρετικά):
+    // sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+
+
     if (m_client->state() != QMqttClient::Connected) {
-        m_client->connectToHost();
+        m_client->connectToHostEncrypted(sslConfig);
         qDebug() << "Attempting to connect to MQTT broker...";
     }
 }
