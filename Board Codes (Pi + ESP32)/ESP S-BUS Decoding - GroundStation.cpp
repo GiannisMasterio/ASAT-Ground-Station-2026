@@ -1,6 +1,11 @@
 #include <Arduino.h>
 #include <LoRa.h>
 
+// ΤΟ LORA ΜΠΟΡΕΙ ΝΑ ΜΕΤΑΦΕΡΕΙ PACKETS ΤΩΝ 8 BYTES
+// ΧΡΗΣΙΜΟΠΟΙΕΙ ΤΗΝ ΤΕΧΝΙΚΗ CSS (Chirp Spread Spectrum)
+// Αντί να εκπέμπει σε μία σταθερή συχνότητα (π.χ. ακριβώς 868.000 MHz), 
+// το LoRa δημιουργεί έναν παλμό (Chirp) του οποίου η συχνότητα αυξάνεται ή μειώνεται συνεχόμενα.
+
 #define SBUS_RX_PIN 3
 #define SBUS_TX_PIN 4 // Δεν το χρειαζόμαστε για λήψη, αλλά πρέπει να δηλωθεί
 
@@ -57,6 +62,11 @@ void setup() {
   Serial1.begin(100000, SERIAL_8E2, SBUS_RX_PIN, SBUS_TX_PIN, true); // Το "true" στο τέλος ενεργοποιεί το Hardware Inversion!
 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
+  if (!LoRa.begin(868E6)) {
+    Serial.println("LoRa Error!");
+    while(1);
+  }
+  LoRa.setSyncWord(0xA5);
   LoRa.setTxPower(20); // max 20dBm 
 
   Serial.println("ESP32-C6 Ready. Waiting for 16-Channel FrSky SBUS data...");
@@ -86,6 +96,7 @@ void loop() {
 
     // Αποστολή των 32 bytes (16 κανάλια x 2 bytes) ως καθαρό binary
       LoRa.beginPacket();
+      LoRa.setSyncWord(0xA5);
       LoRa.write((uint8_t*)pwm, sizeof(pwm)); 
       LoRa.endPacket();
 
