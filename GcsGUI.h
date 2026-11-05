@@ -54,15 +54,7 @@ struct SettingsElements {
 
 };
 
-struct ControlSurfaces {
-    int channel; 
-    int low_pwm_value;
-    int high_pwm_value;
-    int current_value;
-    double min_angle;
-    double max_angle;
-    double current_angle;
-};
+
 
 struct GraphDataPoint {
     double time;
@@ -403,6 +395,24 @@ private:
     void setup3DView(QGridLayout* layout);
 
     void updateSingleServoBox(QWidget* box, ControlSurfaces* surface);
+
+	template<typename T> 
+    bool updateValue(T& member, const T& newValue) { // θα εχουνε τον ιδιο τυπο
+		if (member != newValue) {
+			member = newValue;
+			return true; // Ενημέρωσε το QML
+		}
+		return false; // Δεν άλλαξε τίποτα
+    }
+
+    template <>
+	inline bool updateValue<qreal>(qreal& member, const qreal& newValue) { // αυτο ισχυει μονο  για qreal, γιατι ειναι float και δεν μπορουμε να χρησιμοποιησουμε το == με float
+        if (qFuzzyCompare(member, newValue)) {
+            return false;
+        }
+        member = newValue;
+        return true;
+    }
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

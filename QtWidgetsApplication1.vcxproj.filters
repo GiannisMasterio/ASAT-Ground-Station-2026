@@ -35,6 +35,9 @@
     <ClCompile Include="mqttclient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="BackendHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -72,6 +75,9 @@
     <QtMoc Include="BigBatteryWidget.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="Backendhandler.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="constants.h">
@@ -81,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="modernui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VarState.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

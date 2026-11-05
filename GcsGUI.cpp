@@ -1,4 +1,5 @@
 ﻿#include "GcsGUI.h" 
+#include "Backendhandler.h"
 #include "containers.h"
 #include "constants.h"
 #include <QtSerialPort/QSerialPortInfo>
@@ -85,6 +86,13 @@ void GcsGUI::keyPressEvent(QKeyEvent* event)
 
 }
 
+void GcsGUI::close_program() {
+    running = false;
+    logToFile(false);
+    handleSerial(false);
+    disconnect_mqtt();
+}
+
 void GcsGUI::set_colors() {
 
     QApplication::setStyle(QStyleFactory::create("Fusion"));
@@ -109,91 +117,6 @@ void GcsGUI::closeEvent(QCloseEvent* event) {
     event->accept();
 }
 
-void GcsGUI::close_program() {
-    running = false;
-    logToFile(false);
-    handleSerial(false);
-    disconnect_mqtt();
-}
-
-void GcsGUI::start_mqtt() {
-
-    if (mqtt_client) {
-        mqtt_client->disconnectFromBroker();
-        delete mqtt_client;
-        mqtt_client = nullptr;
-    }
-    mqtt_client = new MqttClient(mqtt_broker, mqtt_port, mqtt_receive_topic, mqtt_send_topic, this);
-    // ΣΥΝΔΕΟΥΜΕ ΤΑ SIGNALS ΤΟΥ WRAPPER
-    connect(mqtt_client, &MqttClient::onConnected, this, &GcsGUI::onMqttConnected);
-    connect(mqtt_client, &MqttClient::onDisconnected, this, &GcsGUI::onMqttDisconnected);
-    connect(mqtt_client, &MqttClient::on_mqtt_message, this, &GcsGUI::onMqttMessageReceived);
-
-    mqtt_client->connectToBroker();
-
-}
-
-void GcsGUI::disconnect_mqtt() {
-
-    if (mqtt_client == nullptr) {
-        qDebug() << "MQTT client was never initialized.";
-        return;
-    }
-
-    if (mqtt_client->getState() == QMqttClient::Connected) {
-
-        mqtt_client->unsubscribe(QMqttTopicFilter(mqtt_receive_topic));
-        mqtt_client->unsubscribe(QMqttTopicFilter(mqtt_send_topic));
-
-        mqtt_client->disconnectFromHost();
-
-        qDebug() << "Unsubscribed and requested disconnection from MQTT Broker.";
-    }
-}
-
-void GcsGUI::publishMqttMessage(const QString& topic, const QString& payload) {
-    if (mqtt_client) {
-
-        qint32 id = mqtt_client->publish(topic, payload); // Αυτό καλεί τη μέθοδο του wrapper!
-
-        if (id != -1) {
-            qDebug() << "MQTT PUBLISHED via Wrapper: Topic=" << topic << ", Payload=" << payload << ", ID=" << id;
-        }
-        else {
-            qWarning() << "ERROR publishing via Wrapper. Client state is likely disconnected.";
-        }
-    }
-    else {
-        qWarning() << "MQTT Client Wrapper not initialized. Message not sent.";
-    }
-}
-
-void GcsGUI::onMqttConnected() {
-    qDebug() << "Connected to MQTT Broker:" << mqtt_broker << ":" << mqtt_port;
-}
-
-void GcsGUI::onMqttDisconnected() {
-    qDebug() << "Disconnected from MQTT Broker.";
-}
-
-void GcsGUI::onMqttMessageReceived(const QString& data) {
-    if (!process_begin) {
-        process_begin = true;
-        audio_handler->playSound(100, "TelemetryConnected");
-    }
-
-    last_mqtt_data = data.toUtf8();
-    qDebug() << "received (MQTT String Data):" << data;
-}
-
-void GcsGUI::updateMqttData() {
-
-    if (!last_mqtt_data.isEmpty()) {
-        processData(QString::fromUtf8(last_mqtt_data), mqtt);
-        last_mqtt_data.clear();
-    }
-}
-
 QWidget* GcsGUI::createCameraWidget(int cameraIndex, QWidget* parent) {
     QFrame* cameraBox = new QFrame(parent);
     
@@ -210,347 +133,7 @@ QWidget* GcsGUI::createCameraWidget(int cameraIndex, QWidget* parent) {
     return cameraBox;
 }
 
-qreal GcsGUI::leftAileronValue() const {
-    return m_leftAileronValue;
-}
-
-void GcsGUI::setLeftAileronValue(qreal value) {
-    
-    if (qFuzzyCompare(m_leftAileronValue, value))
-        return;
-
-    m_leftAileronValue = value;
-    emit leftAileronValueChanged(); // ΞΥΠΝΑ ΤΟ QML!
-}
-
-qreal GcsGUI::rightAileronValue() const {
-    return m_rightAileronValue;
-}
-
-void GcsGUI::setRightAileronValue(qreal value) {
-    if (qFuzzyCompare(m_rightAileronValue, value))
-        return;
-
-    m_rightAileronValue = value;
-    emit rightAileronValueChanged(); // ΞΥΠΝΑ ΤΟ QML!
-}
-
-void GcsGUI::setLeftAileronColor(const QColor& color) {
-    if (m_leftAileronColor != color) {
-        m_leftAileronColor = color;
-        emit leftAileronColorChanged();
-    }
-}
-
-void GcsGUI::setThrottle(qreal val)
-{
-    if (val < 0) val = 0;
-
-    if (qFuzzyCompare(m_throttle, val))
-        return;
-
-    m_throttle = val;
-    emit throttleChanged();
-    /*
-    if (audio_handler) {
-        audio_handler->setDynamicVolume("Engine", m_throttle);
-    } */
-}
-
-void GcsGUI::setRightAileronColor(const QColor& color) {
-    if (m_rightAileronColor != color) {
-        m_rightAileronColor = color;
-        emit rightAileronColorChanged();
-    }
-}
-
-void GcsGUI::setRudderColor(const QColor& color) {
-    if (this->m_rudderColor != color) {
-        this->m_rudderColor = color;
-        emit rudderColorChanged(); // Αυτό λέει στο QML "άλλαξε τώρα!"
-    }
-}
-
-void GcsGUI::setRudderValue(double value) {
-    if (m_rudderValue != value) {
-        m_rudderValue = value;
-        emit rudderValueChanged(); // Ενημερώνει το QML
-    }
-}
-
-void GcsGUI::setElevatorColor(const QColor& color) {
-    if (m_elevatorColor != color) {
-        m_elevatorColor = color;
-        emit elevatorColorChanged();
-    }
-}
-
-void GcsGUI::setElevatorValue(double value) {
-    if (m_elevatorValue != value) {
-        m_elevatorValue = value;
-        emit elevatorValueChanged();
-    }
-}
-
-void GcsGUI::setLeftFlapsColor(const QColor& color) {
-
-    if (m_leftFlapsColor != color) {
-        m_leftFlapsColor = color;
-        emit leftFlapsColorChanged();
-    }
-}
-
-void GcsGUI::setRightFlapsColor(const QColor& color) {
-
-    if (m_rightFlapsColor != color) {
-        m_rightFlapsColor = color;
-        emit rightFlapsColorChanged();
-    }
-}
-
-void GcsGUI::setCameraIndex(int index) {
-    if (m_cameraIndex == index)
-        return;
-    m_cameraIndex = index;
-    emit cameraIndexChanged();
-}
-
-void GcsGUI::setup3DView(QGridLayout* layout) {
-
-    QQuickView* view = new QQuickView(sharedQmlEngine, nullptr);
-    view->rootContext()->setContextProperty("gcsBackend", this);
-
-    QString qmlPath = QCoreApplication::applicationDirPath() + "/MainView.qml";
-    view->setSource(QUrl::fromLocalFile(qmlPath));
-    view->setResizeMode(QQuickView::SizeRootObjectToView);
-
-    QWidget* container = QWidget::createWindowContainer(view, this);
-
-    container->setMinimumSize(640, 360);
-    container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
-    layout->addWidget(container, 0, 1, 2, 1);
-}
-
-void GcsGUI::changeScene() {
-
-    if (lastSceneChange.isValid() && lastSceneChange.elapsed() < 90) return;
-    lastSceneChange.start();
-
-    if (current_scene == "EARTH" || current_scene == "SERVO") {
-        if (scene_icon_path == PLANEICONPATH) {
-            current_scene = "SURFACES";
-            sceneStack->setCurrentIndex(1);
-        }
-        else {
-            current_scene = "MAIN";
-            sceneStack->setCurrentIndex(0);
-        }
-    }
-
-    else if (current_scene == "MAIN") {
-        current_scene = "SURFACES";
-        sceneStack->setCurrentIndex(1);
-    }
-
-    else if (current_scene == "SURFACES") {
-        current_scene = "MAIN";
-        sceneStack->setCurrentIndex(0);
-    }
-
-    this->updateBottomToolbar();
-}
-
-QFrame* GcsGUI::createBottomToolbar() {
-
-    QFrame* toolbarFrame = new QFrame();
-    toolbarFrame->setFixedHeight(100); 
-    toolbarFrame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    toolbarFrame->setStyleSheet(
-        "QFrame {" "   background-image: none;"  "   background-color: #121212;"          
-        "   border-top: 1px solid #444;"  "   border-bottom: none;" "   border-left: none;"    
-        "   border-right: none;" "}");
-    QHBoxLayout* toolbarLayout = new QHBoxLayout(toolbarFrame);
-    toolbarLayout->setContentsMargins(20, 0, 20, 0);
-    toolbarLayout->setSpacing(10);
-
-    batteryIndicator = new BatteryWidget();
-    batteryIndicator->setObjectName("MyBatteryWidget"); 
-    batteryIndicator->setFixedSize(120, 90); 
-
-    auto createIcon = [&](const QString& iconPath, IconType type) {
-        QPushButton* btn;
-
-        if (type == Battery) {
-            batteryIndicator->setObjectName("MyBatteryWidget");
-            btn = batteryIndicator; 
-            btn->setStyleSheet(
-                "QPushButton {"
-                "   background-color: rgba(0, 0, 0, 0);" 
-                "   background: transparent;"
-                "   border: none;"
-                "   border-radius: 10px;"
-                "}"
-                "QPushButton:hover {"
-                "   background-color: rgba(255, 255, 255, 30);" 
-                "}"
-            );
-        }
-
-        else {
-            btn = new QPushButton();
-            btn->setIcon(QIcon(iconPath));
-            btn->setIconSize(QSize(70, 70));
-            btn->setFixedSize(90, 90);
-            btn->setStyleSheet(
-                "QPushButton {" "   background: transparent;" "   border: none;" "   border-radius: 10px;" "}"
-                "QPushButton:hover {" "   background-color: rgba(255, 255, 255, 30);"  "}");
-        }
-
-        switch (type) {
-
-         case Scene:
-            btn->setObjectName("SceneBtn");
-            sceneIconButton = btn;
-            QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
-                this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
-                this->changeScene();
-                this->updateBottomToolbar();
-                });
-            break;
-
-         case Earth:
-             btn->setObjectName("EarthBtn");
-             QObject::connect(btn, &QPushButton::clicked, this, [this]() {
-                 if (current_scene == "EARTH");
-                 else {
-                     this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
-                     current_scene = "EARTH";
-                     sceneStack->setCurrentIndex(2);
-                 }
-
-                 });
-             break;
-
-         case Settings:
-            btn->setObjectName("SettingsBtn");
-            QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
-                 this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
-                 this->chooseSettings();
-                 });
-            break;
-
-         case Logging:
-             btn->setObjectName("LoggingBtn");
-             loggingIconButton = btn;
-             break;
-
-         case Status:
-             btn->setObjectName("StatusBtn");
-             statusIconButton = btn;
-             break;
-
-         case Save:
-             btn->setObjectName("SaveBtn");
-             saveIconButton = btn;
-             QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
-                 if (unsaved_changes) {
-                     this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
-                     this->saveSettings();
-                 }; });
-             break;
-
-         case Battery:
-             break;
-
-        }
-        return btn;
-
-        };
-
-    toolbarLayout->addWidget(createIcon(status_icon_path, Status));
-    toolbarLayout->addWidget(createIcon(scene_icon_path, Scene));
-    toolbarLayout->addWidget(createIcon(earth_icon_path, Earth));
-    toolbarLayout->addWidget(createIcon(logging_icon_path, Logging));
-    toolbarLayout->addWidget(batteryIndicator, 0, Qt::AlignVCenter);
-    
-
-    toolbarLayout->addStretch(2); 
-
-    auto createBottomButton = [&](const QString& text, void (GcsGUI::*slotmethod)() ) {
-        QPushButton* btn = new QPushButton(text);
-        if (text == "Choose Log Location") // χρειαζεται περισσοτερο χωρο το συγκεκριμενο
-         btn->setFixedSize(310, 70);
-        else btn->setFixedSize(270, 70);
-        btn->setStyleSheet(HOVERED_STYLE);
-        QObject::connect(btn, &QPushButton::clicked, this, [this, slotmethod]() {
-             this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
-             (this->*slotmethod)();
-            });
-        return btn;
-        };
-
-    toolbarLayout->addWidget(createBottomButton("Open Log File", &GcsGUI::openLogFile));
-    toolbarLayout->addWidget(createBottomButton("Choose Log Location", &GcsGUI::chooseLogLocation));
-    toolbarLayout->addWidget(createBottomButton("Serial Control", &GcsGUI::serial_control));
-    toolbarLayout->addWidget(createIcon(save_icon_path, Save));
-    toolbarLayout->addWidget(createIcon(SETTINGSICONPATH, Settings));
-    
-    return toolbarFrame;
-}
-
-void GcsGUI::updateBottomToolbar() {
-
-    if (current_scene == "SURFACES") {
-        scene_icon_path = HOMEICONPATH;
-    }
-    else {
-        scene_icon_path = PLANEICONPATH;
-    }
-
-    if (armed) status_icon_path = ARMED_ICONPATH;
-    else status_icon_path = DISARMED_ICONPATH;
-
-    if (write_logs) logging_icon_path = LOGGING_ON_ICONPATH;
-    else logging_icon_path = LOGGING_OFF_ICONPATH;
-
-    if (unsaved_changes) save_icon_path = SAVEICONPATH;
-    else save_icon_path = SAVEICON_LOW_OPACITY_PATH;
-
-    QList<QPushButton*> sceneBtns = sceneStack->findChildren<QPushButton*>("SceneBtn");
-    for (QPushButton* btn : sceneBtns) {
-        btn->setIcon(QIcon(scene_icon_path));
-    }
-
-    QList<QPushButton*> statusBtns = sceneStack->findChildren<QPushButton*>("StatusBtn");
-    for (QPushButton* btn : statusBtns) {
-        btn->setIcon(QIcon(status_icon_path));
-    }
-
-    QList<QPushButton*> loggingBtns = sceneStack->findChildren<QPushButton*>("LoggingBtn");
-    for (QPushButton* btn : loggingBtns) {
-        btn->setIcon(QIcon(logging_icon_path));
-    }
-
-    QList<QPushButton*> saveBtns = sceneStack->findChildren<QPushButton*>("SaveBtn");
-    for (QPushButton* btn : saveBtns) {
-        btn->setIcon(QIcon(save_icon_path));
-    }
-
-}
-
-double GcsGUI::getServoAngle(ControlSurfaces* control_surface) {
-
-    int pwm_value = control_surface->current_value;
-    double min_angle = control_surface->min_angle;
-    double max_angle = control_surface->max_angle;
-    int low_pwm_value = control_surface->low_pwm_value;
-    int high_pwm_value = control_surface->high_pwm_value;
-    double servo_angle = min_angle  + (static_cast<double>(pwm_value - low_pwm_value) * (max_angle - min_angle) / (high_pwm_value- low_pwm_value));
-
-    return servo_angle;
-
-}
+// SCENES 
 
 void GcsGUI::createMainScene() {
 
@@ -917,6 +500,327 @@ void GcsGUI::createEarthProjectionScene() {
 
     mainVLayout->addWidget(createBottomToolbar());
     this->updateBottomToolbar();
+}
+
+void GcsGUI::changeScene() {
+
+    if (lastSceneChange.isValid() && lastSceneChange.elapsed() < 90) return;
+    lastSceneChange.start();
+
+    if (current_scene == "EARTH" || current_scene == "SERVO") {
+        if (scene_icon_path == PLANEICONPATH) {
+            current_scene = "SURFACES";
+            sceneStack->setCurrentIndex(1);
+        }
+        else {
+            current_scene = "MAIN";
+            sceneStack->setCurrentIndex(0);
+        }
+    }
+
+    else if (current_scene == "MAIN") {
+        current_scene = "SURFACES";
+        sceneStack->setCurrentIndex(1);
+    }
+
+    else if (current_scene == "SURFACES") {
+        current_scene = "MAIN";
+        sceneStack->setCurrentIndex(0);
+    }
+
+    this->updateBottomToolbar();
+}
+
+// CONTROL SURFACES SETTERS (QML SIGNALS) 
+
+void GcsGUI::setLeftAileronValue(qreal value) {
+    if (updateValue(m_leftAileronValue, value))
+        emit leftAileronValueChanged(); // ΞΥΠΝΑ ΤΟ QML!
+}
+
+void GcsGUI::setRightAileronValue(qreal value) {
+    if (updateValue(m_rightAileronValue, value))
+        emit rightAileronValueChanged();
+}
+
+void GcsGUI::setLeftAileronColor(const QColor& color) {
+    if (updateValue(m_leftAileronColor, color))
+        emit leftAileronColorChanged();
+}
+
+void GcsGUI::setRightAileronColor(const QColor& color) {
+    if (updateValue(m_rightAileronColor, color))
+        emit rightAileronColorChanged();
+}
+
+void GcsGUI::setRudderValue(double value) {
+    if (updateValue(m_rudderValue, value))
+        emit rudderValueChanged();
+}
+
+void GcsGUI::setRudderColor(const QColor& color) {
+    if (updateValue(m_rudderColor, color))
+        emit rudderColorChanged(); // Αυτό λέει στο QML "άλλαξε τώρα!"
+}
+
+void GcsGUI::setElevatorValue(double value) {
+    if (updateValue(m_elevatorValue, value))
+        emit elevatorValueChanged();
+}
+
+void GcsGUI::setElevatorColor(const QColor& color) {
+    if (updateValue(m_elevatorColor, color))
+        emit elevatorColorChanged();
+}
+
+void GcsGUI::setLeftFlapsColor(const QColor& color) {
+    if (updateValue(m_leftFlapsColor, color))
+        emit leftFlapsColorChanged();
+}
+
+void GcsGUI::setRightFlapsColor(const QColor& color) {
+    if (updateValue(m_rightFlapsColor, color))
+        emit rightFlapsColorChanged();
+}
+
+qreal GcsGUI::leftAileronValue() const {
+    return m_leftAileronValue;
+}
+
+qreal GcsGUI::rightAileronValue() const {
+    return m_rightAileronValue;
+}
+
+// --------------------------------------------------------------
+
+void GcsGUI::setThrottle(qreal val)
+{
+    if (val < 0) val = 0;
+
+    if (qFuzzyCompare(m_throttle, val))
+        return;
+
+    m_throttle = val;
+    emit throttleChanged();
+    /*
+    if (audio_handler) {
+        audio_handler->setDynamicVolume("Engine", m_throttle);
+    } */
+}
+
+void GcsGUI::setCameraIndex(int index) {
+    if (m_cameraIndex == index)
+        return;
+    m_cameraIndex = index;
+    emit cameraIndexChanged();
+}
+
+void GcsGUI::setup3DView(QGridLayout* layout) {
+
+    QQuickView* view = new QQuickView(sharedQmlEngine, nullptr);
+    view->rootContext()->setContextProperty("gcsBackend", this);
+
+    QString qmlPath = QCoreApplication::applicationDirPath() + "/MainView.qml";
+    view->setSource(QUrl::fromLocalFile(qmlPath));
+    view->setResizeMode(QQuickView::SizeRootObjectToView);
+
+    QWidget* container = QWidget::createWindowContainer(view, this);
+
+    container->setMinimumSize(640, 360);
+    container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    layout->addWidget(container, 0, 1, 2, 1);
+}
+
+QFrame* GcsGUI::createBottomToolbar() {
+
+    QFrame* toolbarFrame = new QFrame();
+    toolbarFrame->setFixedHeight(100); 
+    toolbarFrame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    toolbarFrame->setStyleSheet(
+        "QFrame {" "   background-image: none;"  "   background-color: #121212;"          
+        "   border-top: 1px solid #444;"  "   border-bottom: none;" "   border-left: none;"    
+        "   border-right: none;" "}");
+    QHBoxLayout* toolbarLayout = new QHBoxLayout(toolbarFrame);
+    toolbarLayout->setContentsMargins(20, 0, 20, 0);
+    toolbarLayout->setSpacing(10);
+
+    batteryIndicator = new BatteryWidget();
+    batteryIndicator->setObjectName("MyBatteryWidget"); 
+    batteryIndicator->setFixedSize(120, 90); 
+
+    auto createIcon = [&](const QString& iconPath, IconType type) {
+        QPushButton* btn;
+
+        if (type == Battery) {
+            batteryIndicator->setObjectName("MyBatteryWidget");
+            btn = batteryIndicator; 
+            btn->setStyleSheet(
+                "QPushButton {"
+                "   background-color: rgba(0, 0, 0, 0);" 
+                "   background: transparent;"
+                "   border: none;"
+                "   border-radius: 10px;"
+                "}"
+                "QPushButton:hover {"
+                "   background-color: rgba(255, 255, 255, 30);" 
+                "}"
+            );
+        }
+
+        else {
+            btn = new QPushButton();
+            btn->setIcon(QIcon(iconPath));
+            btn->setIconSize(QSize(70, 70));
+            btn->setFixedSize(90, 90);
+            btn->setStyleSheet(
+                "QPushButton {" "   background: transparent;" "   border: none;" "   border-radius: 10px;" "}"
+                "QPushButton:hover {" "   background-color: rgba(255, 255, 255, 30);"  "}");
+        }
+
+        switch (type) {
+
+         case Scene:
+            btn->setObjectName("SceneBtn");
+            sceneIconButton = btn;
+            QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
+                this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+                this->changeScene();
+                this->updateBottomToolbar();
+                });
+            break;
+
+         case Earth:
+             btn->setObjectName("EarthBtn");
+             QObject::connect(btn, &QPushButton::clicked, this, [this]() {
+                 if (current_scene == "EARTH");
+                 else {
+                     this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+                     current_scene = "EARTH";
+                     sceneStack->setCurrentIndex(2);
+                 }
+
+                 });
+             break;
+
+         case Settings:
+            btn->setObjectName("SettingsBtn");
+            QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
+                 this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+                 this->chooseSettings();
+                 });
+            break;
+
+         case Logging:
+             btn->setObjectName("LoggingBtn");
+             loggingIconButton = btn;
+             break;
+
+         case Status:
+             btn->setObjectName("StatusBtn");
+             statusIconButton = btn;
+             break;
+
+         case Save:
+             btn->setObjectName("SaveBtn");
+             saveIconButton = btn;
+             QObject::connect(btn, &QPushButton::clicked, this, [this]() { 
+                 if (unsaved_changes) {
+                     this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+                     this->saveSettings();
+                 }; });
+             break;
+
+         case Battery:
+             break;
+
+        }
+        return btn;
+
+        };
+
+    toolbarLayout->addWidget(createIcon(status_icon_path, Status));
+    toolbarLayout->addWidget(createIcon(scene_icon_path, Scene));
+    toolbarLayout->addWidget(createIcon(earth_icon_path, Earth));
+    toolbarLayout->addWidget(createIcon(logging_icon_path, Logging));
+    toolbarLayout->addWidget(batteryIndicator, 0, Qt::AlignVCenter);
+    
+
+    toolbarLayout->addStretch(2); 
+
+    auto createBottomButton = [&](const QString& text, void (GcsGUI::*slotmethod)() ) {
+        QPushButton* btn = new QPushButton(text);
+        if (text == "Choose Log Location") // χρειαζεται περισσοτερο χωρο το συγκεκριμενο
+         btn->setFixedSize(310, 70);
+        else btn->setFixedSize(270, 70);
+        btn->setStyleSheet(HOVERED_STYLE);
+        QObject::connect(btn, &QPushButton::clicked, this, [this, slotmethod]() {
+             this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+             (this->*slotmethod)();
+            });
+        return btn;
+        };
+
+    toolbarLayout->addWidget(createBottomButton("Open Log File", &GcsGUI::openLogFile));
+    toolbarLayout->addWidget(createBottomButton("Choose Log Location", &GcsGUI::chooseLogLocation));
+    toolbarLayout->addWidget(createBottomButton("Serial Control", &GcsGUI::serial_control));
+    toolbarLayout->addWidget(createIcon(save_icon_path, Save));
+    toolbarLayout->addWidget(createIcon(SETTINGSICONPATH, Settings));
+    
+    return toolbarFrame;
+}
+
+void GcsGUI::updateBottomToolbar() {
+
+    if (current_scene == "SURFACES") {
+        scene_icon_path = HOMEICONPATH;
+    }
+    else {
+        scene_icon_path = PLANEICONPATH;
+    }
+
+    if (armed) status_icon_path = ARMED_ICONPATH;
+    else status_icon_path = DISARMED_ICONPATH;
+
+    if (write_logs) logging_icon_path = LOGGING_ON_ICONPATH;
+    else logging_icon_path = LOGGING_OFF_ICONPATH;
+
+    if (unsaved_changes) save_icon_path = SAVEICONPATH;
+    else save_icon_path = SAVEICON_LOW_OPACITY_PATH;
+
+    QList<QPushButton*> sceneBtns = sceneStack->findChildren<QPushButton*>("SceneBtn");
+    for (QPushButton* btn : sceneBtns) {
+        btn->setIcon(QIcon(scene_icon_path));
+    }
+
+    QList<QPushButton*> statusBtns = sceneStack->findChildren<QPushButton*>("StatusBtn");
+    for (QPushButton* btn : statusBtns) {
+        btn->setIcon(QIcon(status_icon_path));
+    }
+
+    QList<QPushButton*> loggingBtns = sceneStack->findChildren<QPushButton*>("LoggingBtn");
+    for (QPushButton* btn : loggingBtns) {
+        btn->setIcon(QIcon(logging_icon_path));
+    }
+
+    QList<QPushButton*> saveBtns = sceneStack->findChildren<QPushButton*>("SaveBtn");
+    for (QPushButton* btn : saveBtns) {
+        btn->setIcon(QIcon(save_icon_path));
+    }
+
+}
+
+double GcsGUI::getServoAngle(ControlSurfaces* control_surface) {
+
+    int pwm_value = control_surface->current_value;
+    double min_angle = control_surface->min_angle;
+    double max_angle = control_surface->max_angle;
+    int low_pwm_value = control_surface->low_pwm_value;
+    int high_pwm_value = control_surface->high_pwm_value;
+    double servo_angle = min_angle  + (static_cast<double>(pwm_value - low_pwm_value) * (max_angle - min_angle) / (high_pwm_value- low_pwm_value));
+
+    return servo_angle;
+
 }
 
 QString getPwmHexColor(const ControlSurfaces& surface) {
@@ -1441,6 +1345,53 @@ void GcsGUI::confirmPort() {
     handleSerial(running);
 }
 
+// --- SETTINGS FIELDS ---
+void GcsGUI::setupSettingsFields() {
+    settings_fields = QVector<SettingsElements>{
+        // --- General / Audio ---
+        { "Sound", "", "", false, &this->soundOn, SettingsElements::Bool },
+        { "Audio Click Sound Volume", "", "", true, &this->audio_click_sfx_volume, SettingsElements::Int },
+        { "Write Logs", "", "", false, &this->write_logs, SettingsElements::Bool },
+        { "MQTT Topic", "", "", false, &this->mqtt_receive_topic, SettingsElements::String },
+        { "MQTT Broker", "", "", false, &this->mqtt_broker, SettingsElements::String },
+        { "MQTT Port", "", "", true, &this->mqtt_port, SettingsElements::Int },
+        { "Min Battery Voltage", "", "", true, &min_batt_voltage, SettingsElements::Double },
+        { "Max Battery Voltage", "", "", true, &max_batt_voltage, SettingsElements::Double },
+        // --- PWM Bounds ---
+        { "Min Motor (us)", "", "", true, &motor.low_pwm_value, SettingsElements::Int },
+        { "Max Motor (us)", "", "", true, &motor.high_pwm_value, SettingsElements::Int },
+        { "Min Rudder (us)", "", "", true, &rudder.low_pwm_value, SettingsElements::Int },
+        { "Max Rudder (us)", "", "", true, &rudder.high_pwm_value, SettingsElements::Int },
+        { "Min Elevator (us)", "", "", true, &elevator.low_pwm_value, SettingsElements::Int },
+        { "Max Elevator (us)", "", "", true, &elevator.high_pwm_value, SettingsElements::Int },
+        { "Min Left Aileron (us)", "", "", true, &left_aileron.low_pwm_value, SettingsElements::Int },
+        { "Max Left Aileron (us)", "", "", true, &left_aileron.high_pwm_value, SettingsElements::Int },
+        { "Min Right Aileron (us)", "", "", true, &right_aileron.low_pwm_value, SettingsElements::Int },
+        { "Max Right Aileron (us)", "", "", true, &right_aileron.high_pwm_value, SettingsElements::Int },
+        { "Min Left Flap (us)", "", "", true, &left_flap.low_pwm_value, SettingsElements::Int },
+        { "Max Left Flap (us)", "", "", true, &left_flap.high_pwm_value, SettingsElements::Int },
+        { "Min Right Flap (us)", "", "", true, &right_flap.low_pwm_value, SettingsElements::Int },
+        { "Max Right Flap (us)", "", "", true, &right_flap.high_pwm_value, SettingsElements::Int },
+        { "Min Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.low_pwm_value, SettingsElements::Int },
+        { "Max Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.high_pwm_value, SettingsElements::Int },
+        { "Min Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.low_pwm_value, SettingsElements::Int },
+        { "Max Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.high_pwm_value, SettingsElements::Int },
+
+        // --- Transmitter Channel Mapping ---
+        { "Motor Channel", "", "", true, &motor.channel, SettingsElements::Int },
+        { "Rudder Channel", "", "", true, &rudder.channel, SettingsElements::Int },
+        { "Elevator Channel", "", "", true, &elevator.channel, SettingsElements::Int },
+        { "Left Aileron Channel", "", "", true, &left_aileron.channel, SettingsElements::Int },
+        { "Right Aileron Channel", "", "", true, &right_aileron.channel, SettingsElements::Int },
+        { "Left Flap Channel", "", "", true, &left_flap.channel, SettingsElements::Int },
+        { "Right Flap Channel", "", "", true, &right_flap.channel, SettingsElements::Int },
+        { "Arm Switch Channel", "", "", true, &arm_status_switch.channel, SettingsElements::Int },
+        { "Landing Gear 1 Channel", "", "", true, &landing_gear1.channel, SettingsElements::Int },
+        { "Landing Gear 2 Channel", "", "", true, &landing_gear2.channel, SettingsElements::Int }
+
+    };
+}
+
 void GcsGUI::chooseSettings() {
 
     QWidget* settings_window = new QWidget(nullptr, Qt::Window);
@@ -1770,53 +1721,7 @@ void GcsGUI::saveSettings() {
     this->updateBottomToolbar();
     save_file->flush();
 }
-
-void GcsGUI::setupSettingsFields() {
-    settings_fields = QVector<SettingsElements>{
-        // --- General / Audio ---
-        {"Sound", "", "", false, &this->soundOn, SettingsElements::Bool},
-        {"Audio Click Sound Volume", "", "", true, &this->audio_click_sfx_volume, SettingsElements::Int},
-        {"Write Logs", "", "", false, &this->write_logs, SettingsElements::Bool},
-        {"MQTT Topic", "", "", false, &this->mqtt_receive_topic, SettingsElements::String},
-        {"MQTT Broker", "", "", false, &this->mqtt_broker, SettingsElements::String},
-        {"MQTT Port", "", "", true, &this->mqtt_port, SettingsElements::Int},
-        {"Min Battery Voltage", "", "", true, &min_batt_voltage, SettingsElements::Double},
-        {"Max Battery Voltage", "", "", true, &max_batt_voltage, SettingsElements::Double},
-        // --- PWM Bounds ---
-        {"Min Motor (us)", "", "", true, &motor.low_pwm_value, SettingsElements::Int},
-        {"Max Motor (us)", "", "", true, &motor.high_pwm_value, SettingsElements::Int},
-        {"Min Rudder (us)", "", "", true, &rudder.low_pwm_value, SettingsElements::Int},
-        {"Max Rudder (us)", "", "", true, &rudder.high_pwm_value, SettingsElements::Int},
-        {"Min Elevator (us)", "", "", true, &elevator.low_pwm_value, SettingsElements::Int},
-        {"Max Elevator (us)", "", "", true, &elevator.high_pwm_value, SettingsElements::Int},
-        {"Min Left Aileron (us)", "", "", true, &left_aileron.low_pwm_value, SettingsElements::Int},
-        {"Max Left Aileron (us)", "", "", true, &left_aileron.high_pwm_value, SettingsElements::Int},
-        {"Min Right Aileron (us)", "", "", true, &right_aileron.low_pwm_value, SettingsElements::Int},
-        {"Max Right Aileron (us)", "", "", true, &right_aileron.high_pwm_value, SettingsElements::Int},
-        {"Min Left Flap (us)", "", "", true, &left_flap.low_pwm_value, SettingsElements::Int},
-        {"Max Left Flap (us)", "", "", true, &left_flap.high_pwm_value, SettingsElements::Int},
-        {"Min Right Flap (us)", "", "", true, &right_flap.low_pwm_value, SettingsElements::Int},
-        {"Max Right Flap (us)", "", "", true, &right_flap.high_pwm_value, SettingsElements::Int},
-        {"Min Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.low_pwm_value, SettingsElements::Int },
-        {"Max Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.high_pwm_value, SettingsElements::Int },
-        {"Min Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.low_pwm_value, SettingsElements::Int },
-        {"Max Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.high_pwm_value, SettingsElements::Int },
-
-        // --- Transmitter Channel Mapping ---
-        {"Motor Channel", "", "", true, &motor.channel, SettingsElements::Int},
-        {"Rudder Channel", "", "", true, &rudder.channel, SettingsElements::Int},
-        {"Elevator Channel", "", "", true, &elevator.channel, SettingsElements::Int},
-        {"Left Aileron Channel", "", "", true, &left_aileron.channel, SettingsElements::Int},
-        {"Right Aileron Channel", "", "", true, &right_aileron.channel, SettingsElements::Int},
-        {"Left Flap Channel", "", "", true, &left_flap.channel, SettingsElements::Int},
-        {"Right Flap Channel", "", "", true, &right_flap.channel, SettingsElements::Int},
-        {"Arm Switch Channel", "", "", true, &arm_status_switch.channel, SettingsElements::Int},
-        {"Landing Gear 1 Channel", "", "", true, &landing_gear1.channel, SettingsElements::Int},
-        {"Landing Gear 2 Channel", "", "", true, &landing_gear2.channel, SettingsElements::Int}
-
-    };
-}
-
+// --------------------------------------------------------------
 void GcsGUI::chooseLogLocation() {
 
     QString initialDir = QFileInfo(log_file_path).path();

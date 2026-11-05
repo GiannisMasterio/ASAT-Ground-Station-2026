@@ -124,6 +124,7 @@ Qt6Mqtt.lib;%(AdditionalDependencies)</AdditionalDependencies>
   <ItemGroup>
     <QtMoc Include="GcsGUI.h" />
     <QtMoc Include="BigBatteryWidget.h" />
+    <ClCompile Include="BackendHandler.cpp" />
     <ClCompile Include="containers.cpp" />
     <QtMoc Include="Gauge.h" />
     <ClCompile Include="graphcontainer.cpp" />
@@ -133,11 +134,13 @@ Qt6Mqtt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="VarState.h" />
     <QtMoc Include="audiohandler.h">
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">"$(QtMsBuild)\qt_vars.target" "$(QtMsBuild)\qt_moc.target"</Command>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </QtMoc>
     <QtMoc Include="BatteryWidget.h" />
+    <QtMoc Include="Backendhandler.h" />
     <ClInclude Include="constants.h" />
     <QtMoc Include="qcustomplot.h" />
     <QtMoc Include="graphcontainer.h" />
