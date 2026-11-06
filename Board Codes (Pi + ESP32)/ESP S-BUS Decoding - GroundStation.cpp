@@ -1,110 +1,116 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include <LoRa.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
 
-// ΤΟ LORA ΜΠΟΡΕΙ ΝΑ ΜΕΤΑΦΕΡΕΙ PACKETS ΤΩΝ 8 BYTES
-// ΧΡΗΣΙΜΟΠΟΙΕΙ ΤΗΝ ΤΕΧΝΙΚΗ CSS (Chirp Spread Spectrum)
-// Αντί να εκπέμπει σε μία σταθερή συχνότητα (π.χ. ακριβώς 868.000 MHz), 
-// το LoRa δημιουργεί έναν παλμό (Chirp) του οποίου η συχνότητα αυξάνεται ή μειώνεται συνεχόμενα.
+#define LORA_SS    18
+#define LORA_RST   14
+#define LORA_DIO0  26
 
-#define SBUS_RX_PIN 3
-#define SBUS_TX_PIN 4 // Δεν το χρειαζόμαστε για λήψη, αλλά πρέπει να δηλωθεί
+const char* ssid = "YOUR_LOCAL_WIFI_SSID";
+const char* password = "YOUR_LOCAL_WIFI_PASSWORD";
+const char* mqtt_server = "192.168.1.100"; // Η IP του τοπικού σου MQTT Broker (π.χ. Mosquitto)
+const int   mqtt_port = 1883;
 
-#define LORA_SS    18  // CS/NSS pin
-#define LORA_RST   14  // Reset pin
-#define LORA_DIO0  26  // DIO0 pin (Interrupt)
+WiFiClient espClient;
+PubSubClient client(espClient);
 
-uint8_t sbusData[25]; // Ένα πλήρες πακέτο SBUS αποτελείται από 25 bytes
-uint16_t channels[16];    
-int pwm[16];          
-int LoraSendInterval = 50;
+// Το __attribute__((packed)) απαγορεύει στον compiler να βάλει "άδεια" bytes
+struct __attribute__((packed)) TelemetryPacket {
+  float MainVoltage;  // 4 bytes
+  float MainCurrent;  // 4 bytes
+  float SVoltage;     // 4 bytes
+  float SCurrent;     // 4 bytes
+  float GSpeed;       // 4 bytes
+  uint8_t SatCount;   // 1 byte  (To 'B' της Python)
+  float Latitude;     // 4 bytes
+  float Longitude;    // 4 bytes
+  float Altitude;     // 4 bytes
+  float HomeDist;     // 4 bytes
+  float PiTemp;       // 4 bytes
+};
 
-void decode_sbus(size_t byteIndex){
-   if (byteIndex == 25) {
-      byteIndex = 0; // Μηδενισμός για το επόμενο πακέτο
+TelemetryPacket telemetry;
 
-      // Έλεγχος του End Byte
-      uint8_t endByte = sbusData[24];
-      if (endByte == 0x00 || endByte == 0x04 || endByte == 0x14 || endByte == 0x24 || endByte == 0x34) { // to endbyte prepei na einai kt apayta
-        // --- Decoding ΚΑΝΑΛΙΩΝ 1 έως 16 ---
-        channels[0]  = ((sbusData[1]       | sbusData[2] << 8)                  & 0x07FF); // to mask grafetai 0000 0111 1111 1111
-        channels[1]  = ((sbusData[2] >> 3  | sbusData[3] << 5)                  & 0x07FF);
-        channels[2]  = ((sbusData[3] >> 6  | sbusData[4] << 2  | sbusData[5] << 10) & 0x07FF);
-        channels[3]  = ((sbusData[5] >> 1  | sbusData[6] << 7)                  & 0x07FF);
-        channels[4]  = ((sbusData[6] >> 4  | sbusData[7] << 4)                  & 0x07FF);
-        channels[5]  = ((sbusData[7] >> 7  | sbusData[8] << 1  | sbusData[9] << 9)  & 0x07FF);
-        channels[6]  = ((sbusData[9] >> 2  | sbusData[10] << 6)                 & 0x07FF);
-        channels[7]  = ((sbusData[10] >> 5 | sbusData[11] << 3)                 & 0x07FF);
-        channels[8]  = ((sbusData[12]      | sbusData[13] << 8)                 & 0x07FF);
-        channels[9]  = ((sbusData[13] >> 3 | sbusData[14] << 5)                 & 0x07FF);
-        channels[10] = ((sbusData[14] >> 6 | sbusData[15] << 2 | sbusData[16] << 10)& 0x07FF);
-        channels[11] = ((sbusData[16] >> 1 | sbusData[17] << 7)                 & 0x07FF);
-        channels[12] = ((sbusData[17] >> 4 | sbusData[18] << 4)                 & 0x07FF);
-        channels[13] = ((sbusData[18] >> 7 | sbusData[19] << 1 | sbusData[20] << 9) & 0x07FF);
-        channels[14] = ((sbusData[20] >> 2 | sbusData[21] << 6)                 & 0x07FF);
-        channels[15] = ((sbusData[21] >> 5 | sbusData[22] << 3)                 & 0x07FF);
+void setup_wifi() {
+  delay(10);
+  Serial.printf("\nΣύνδεση στο WiFi: %s", ssid);
+  WiFi.begin(ssid, password);
 
-        // to sbus data[23]
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n✅ WiFi Συνδέθηκε! IP: " + WiFi.localIP().toString());
+}
 
-        // Μετατροπή των τιμών SBUS σε κλασικά PWM (1000 - 2000 ms)
-        for (size_t i = 0; i < 16; i++) {
-          pwm[i] = map(channels[i], 172, 1811, 988, 2012); // βάζω τα ακριβή, "ανοιχτά" όρια (extended limits) που χρησιμοποιούν λογισμικά όπως το OpenTX/EdgeTX για να αντιστοιχούν στο 100% της κίνησης του στικ.
-        } 
-      }
+void reconnect() {
+  // Προσπάθεια επανασύνδεσης στο MQTT αν χαθεί η σύνδεση
+  while (!client.connected()) {
+    Serial.print("🔄 Σύνδεση στο MQTT Broker...");
+    // Βάλε mqtt_user, mqtt_pass μέσα στην connect αν χρειάζεται
+    if (client.connect("ESP32_LoRa_Gateway")) {
+      Serial.println(" Επιτυχία!");
+    } else {
+      Serial.print(" Απέτυχε, rc=");
+      Serial.print(client.state());
+      Serial.println(" Νέα δοκιμή σε 5 δευτερόλεπτα...");
+      delay(5000);
     }
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(3000); // Μικρή καθυστέρηση για να προλάβει να ανοίξει το Serial Monitor
-  
-  // Στο ESP32-C6 χρησιμοποιούμε το Serial1 αντί για Serial2
-  // Το πρωτόκολλο SBUS τρέχει στα 100.000 baud, 8 data bits, Even parity, 2 stop bits.
-  Serial1.begin(100000, SERIAL_8E2, SBUS_RX_PIN, SBUS_TX_PIN, true); // Το "true" στο τέλος ενεργοποιεί το Hardware Inversion!
+  delay(2000);
 
+  // 1. Εκκίνηση WiFi & MQTT
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+
+  // 2. Εκκίνηση LoRa
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
   if (!LoRa.begin(868E6)) {
-    Serial.println("LoRa Error!");
-    while(1);
+    Serial.println("❌ Αποτυχία εκκίνησης LoRa Module!");
+    while (true);
   }
-  LoRa.setSyncWord(0xA5);
-  LoRa.setTxPower(20); // max 20dBm 
-
-  Serial.println("ESP32-C6 Ready. Waiting for 16-Channel FrSky SBUS data...");
+  Serial.println("✅ Το LoRa Gateway είναι έτοιμο και περιμένει τηλεμετρία!");
 }
 
-// Η πληροφορία είναι 11-bit: Το πρωτόκολλο SBUS στέλνει έναν αριθμό (θέση του στικ) που μπορεί να είναι από το 0 έως το 2047.
-// Για να γραφτεί αυτός ο αριθμός στο δυαδικό σύστημα, χρειάζεται το πολύ 11 bits.
-
 void loop() {
+  // Διατήρηση σύνδεσης MQTT
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
 
-  // Χρησιμοποιούμε το Serial1 (Hardware UART) -- apo edw diabazoume
-  if (Serial1.available() > 0) {
-    uint8_t incomingByte = Serial1.read(); // διαβαζουμε απτο serial1 - hardware uart
-    static int byteIndex = 0;
+  // Έλεγχος για εισερχόμενα πακέτα LoRa
+  int packetSize = LoRa.parsePacket();
+  
+  if (packetSize == sizeof(TelemetryPacket)) { // Περιμένουμε ακριβώς 41 bytes
     
-    // Το SBUS πακέτο ξεκινάει ΠΑΝΤΑ με το byte 0x0F
-    if (byteIndex == 0 && incomingByte != 0x0F) return;
+    // Ρουφάμε τα 41 bytes κατευθείαν μέσα στο C++ struct
+    LoRa.readBytes((uint8_t*)&telemetry, sizeof(TelemetryPacket));
 
-    sbusData[byteIndex] = incomingByte;
-    byteIndex++;
-    
-    decode_sbus(byteIndex);
-    static unsigned long lastLoraSend = 0;
-    
-    if (millis() - lastLoraSend > LoraSendInterval) { 
-      lastLoraSend = millis();
+    // Φτιάχνουμε το JSON String για το MQTT
+    char jsonPayload[512];
+    snprintf(jsonPayload, sizeof(jsonPayload),
+             "{\"MainVoltage\":%.2f,\"MainCurrent\":%.2f,\"SVoltage\":%.2f,\"SCurrent\":%.2f,"
+             "\"GSpeed\":%.1f,\"SatCount\":%d,\"Latitude\":%.6f,\"Longitude\":%.6f,"
+             "\"Altitude\":%.1f,\"HomeDist\":%.1f,\"PiTemp\":%.1f}",
+             telemetry.MainVoltage, telemetry.MainCurrent, telemetry.SVoltage, telemetry.SCurrent,
+             telemetry.GSpeed, telemetry.SatCount, telemetry.Latitude, telemetry.Longitude,
+             telemetry.Altitude, telemetry.HomeDist, telemetry.PiTemp);
 
-    // Αποστολή των 32 bytes (16 κανάλια x 2 bytes) ως καθαρό binary
-      LoRa.beginPacket();
-      LoRa.setSyncWord(0xA5);
-      LoRa.write((uint8_t*)pwm, sizeof(pwm)); 
-      LoRa.endPacket();
+    // Δημοσίευση (Publish) στο Τοπικό Δίκτυο
+    client.publish("daidalus/telemetry/state", jsonPayload);
 
-      static unsigned long lastPrint = 0;
-      if (millis() - lastPrint > 500) { // print για serial monitor καθε 0.5sec
-      lastPrint = millis();
-      Serial.printf("Sent via LoRa -> CH1: %d, CH2: %d, CH3: %d, CH4: %d\n", pwm[0], pwm[1], pwm[2], pwm[3]);
-      }
-    }
+    // Εκτύπωση στη Σειριακή Θύρα (USB Laptop) για επιβεβαίωση
+    Serial.printf("📡 [LoRa RX] Alt: %.1fm | Sats: %d | PiTemp: %.1fC | Published to MQTT!\n", 
+                  telemetry.Altitude, telemetry.SatCount, telemetry.PiTemp);
+  }
+  else if (packetSize > 0) {
+    Serial.printf("⚠️ Ήρθε άγνωστο πακέτο: %d bytes\n", packetSize);
   }
 }
