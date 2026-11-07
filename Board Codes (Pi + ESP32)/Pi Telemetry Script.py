@@ -2,28 +2,22 @@ import time
 import pigpio
 import struct
 import os
-import board
-import busio
-import digitalio
-import adafruit_rfm9x
+import serial
 
-# --- 1. ΡΥΘΜΙΣΕΙΣ LORA (SPI) ---
-# Βεβαιώσου ότι έχεις ενεργοποιήσει το SPI στο raspi-config
-CS_PIN = digitalio.DigitalInOut(board.CE1)
-RESET_PIN = digitalio.DigitalInOut(board.D25)
-# Οι ακίδες SPI του Pi (MOSI=19, MISO=21, SCK=23) ορίζονται αυτόματα από το board.SPI()
-spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-
+# --- 1. ΡΥΘΜΙΣΕΙΣ LORA (UART) ---
 try:
-    rfm9x = adafruit_rfm9x.RFM9x(spi, CS_PIN, RESET_PIN, 868.0)
-    rfm9x.tx_power = 20
-    print("✅ Το LoRa Module αρχικοποιήθηκε επιτυχώς!")
-except RuntimeError as error:
+    # Ανοίγουμε τη σειριακή θύρα του Pi Zero για το LoRa
+    lora = serial.Serial(
+        port='/dev/ttyS0', 
+        baudrate=9600, # Βεβαιώσου ότι είναι το σωστό baud rate για το module σου
+        timeout=1
+    )
+    print("✅ Το LoRa Module (UART) αρχικοποιήθηκε επιτυχώς!")
+except Exception as error:
     print(f"❌ Σφάλμα LoRa: {error}")
-    print("Ελέγξτε τις συνδέσεις SPI και τα καλώδια.")
+    print("Ελέγξτε τις συνδέσεις TX/RX και αν είναι ενεργό το Serial Port.")
     exit(1)
 
-# --- 2. ΡΥΘΜΙΣΕΙΣ PIGPIO & S-PORT ---
 RX_PIN = 17
 BAUD = 57600
 publish_time_interval = 1.0
@@ -119,7 +113,7 @@ pi.set_mode(RX_PIN, pigpio.INPUT)
 pi.bb_serial_read_open(RX_PIN, BAUD)
 pi.bb_serial_invert(RX_PIN, 1)
 
-print(f"🚀 Σύστημα ενεργό: Συλλέγει S.Port και εκπέμπει μέσω LoRa...")
+print(f"🚀 Σύστημα ενεργό: Συλλέγει S.Port και εκπέμπει μέσω LoRa (UART)...")
 
 last_publish_time = time.time()
 
@@ -133,14 +127,10 @@ try:
 
         current_time = time.time()
         
-        # Εκπομπή μέσω LoRa κάθε 1 δευτερόλεπτο
         if current_time - last_publish_time >= publish_time_interval:
             telemetry_packet["PiTemp"] = get_cpu_temperature()
             
             # ΣΥΜΠΙΕΣΗ ΔΕΔΟΜΕΝΩΝ (Binary Struct Packing)
-            # '<' σημαίνει Little Endian (όπως διαβάζει το ESP32)
-            # 'f' σημαίνει 4-byte float, 'B' σημαίνει 1-byte unsigned char
-            # Σύνολο: 10 floats (40 bytes) + 1 uint8 (1 byte) = 41 bytes
             binary_payload = struct.pack('<fffffBfffff',
                 float(telemetry_packet['MainVoltage']),
                 float(telemetry_packet['MainCurrent']),
@@ -155,11 +145,11 @@ try:
                 float(telemetry_packet['PiTemp'])
             )
 
-            # Αποστολή των 41 bytes μέσω LoRa
-            rfm9x.send(binary_payload)
+            # Αποστολή των 41 bytes μέσω LoRa UART
+            lora.write(binary_payload)
+            lora.flush() # Εξασφαλίζει ότι τα δεδομένα έφυγαν από τον buffer
             
-            # Τυπώνουμε τα δεδομένα για να βλέπουμε τι στέλνουμε
-            print(f"📤 Εκπέμφθηκαν {len(binary_payload)} bytes: Volts={telemetry_packet['MainVoltage']}V, Alt={telemetry_packet['Altitude']}m")
+            print(f"📤 Εκπέμφθηκαν {len(binary_payload)} bytes")
             
             last_publish_time = current_time
 
@@ -168,5 +158,7 @@ try:
 except KeyboardInterrupt:
     print("\n🛑 Τερματισμός...")
 finally:
+    if 'lora' in locals() and lora.is_open:
+        lora.close()
     pi.bb_serial_read_close(RX_PIN)
     pi.stop()
