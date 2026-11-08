@@ -13,6 +13,7 @@
 #include "qcustomplot.h"
 #include "audiohandler.h"
 #include "BatteryWidget.h"
+#include "BackendHandler.h"
 #include <Qt3DExtras/Qt3DWindow>
 #include <Qt3DExtras/QCuboidMesh>
 #include <Qt3DExtras/QPhongMaterial>
@@ -31,30 +32,24 @@
 #include <QWidget>
 
 struct SettingsElements {
-
     QString labeltext;
     QString initialValue;
     QString placeholder;
     bool isNumeric = false;
 
-    void* targetVar;
+    void* targetVar; // Βεβαιωθείτε ότι υπάρχει το αστεράκι (*)
 
     enum Type { Int, Bool, String, Double } type;
 
     QLabel* label = nullptr;
     QWidget* entry = nullptr;
 
-    SettingsElements(const QString& l, const QString& v, const QString& p, bool numeric, void* target,
-        Type t) : labeltext(l), initialValue(v),
-        placeholder(p),
-        isNumeric(numeric),
-        targetVar(target),
-        type(t) {
+    // Ο Constructor πρέπει να είναι ακριβώς έτσι:
+    SettingsElements(const QString& l, const QString& v, const QString& p, bool numeric, void* target, Type t)
+        : labeltext(l), initialValue(v), placeholder(p), isNumeric(numeric), targetVar(target), type(t)
+    {
     }
-
 };
-
-
 
 struct GraphDataPoint {
     double time;
@@ -71,6 +66,11 @@ struct LogEntry {
 enum IconType { Scene, Logging, Earth, Status,  Settings, Save, Battery};
 
 class Containers;
+class Backendhandler;
+
+// Σε αντίθεση με γλώσσες όπως η C# ή η Java, η C++ δεν διαβάζει όλα τα αρχεία του project πρώτα για να δει "ποιες κλάσεις υπάρχουν".
+// Όταν ο compiler ανοίγει να διαβάσει το GcsGUI.h και φτάνει στη γραμμή 236, βλέπει μια λέξη (Backendhandler) την οποία δεν έχει ξανασυναντήσει
+// μέχρι εκείνη τη γραμμή. Αφού δεν ξέρει τι είναι (δεν ξέρει αν είναι μεταβλητή, συνάρτηση ή κλάση), πετάει σφάλμα.
 
 class GcsGUI : public QMainWindow
 {
@@ -202,12 +202,6 @@ signals:
     void elevatorValueChanged();
 
 private slots:
-
-    void updateMqttData();
-    void onMqttConnected();
-    void onMqttDisconnected();
-    void onMqttMessageReceived(const QString& message);
-    void publishMqttMessage(const QString& topic, const QString& payload);
     
     void setThrottle(qreal val);
 
@@ -229,6 +223,7 @@ private slots:
     void logToFile(bool status);
 
 private:
+	BackendHandler* backend_handler = nullptr;
 
     QLabel* latitudeLabel = nullptr;
     QLabel* longitudeLabel = nullptr;
@@ -378,8 +373,6 @@ private:
 
     // --- Functions & Methods --- Aποθήκευση στο Text Segment ---
     double getServoAngle(ControlSurfaces* control_surface);
-    void start_mqtt();
-    void disconnect_mqtt();
     QFrame* createBottomToolbar();
     QWidget* createCameraWidget(int cameraIndex, QWidget* parent);
     void createMainScene();
@@ -396,17 +389,17 @@ private:
 
     void updateSingleServoBox(QWidget* box, ControlSurfaces* surface);
 
-	template<typename T> 
-    bool updateValue(T& member, const T& newValue) { // θα εχουνε τον ιδιο τυπο
-		if (member != newValue) {
-			member = newValue;
-			return true; // Ενημέρωσε το QML
-		}
-		return false; // Δεν άλλαξε τίποτα
+    template<typename T>
+    bool updateValue(T& member, const T& newValue) {
+        if (member != newValue) {
+            member = newValue;
+            return true;
+        }
+        return false;
     }
 
-    template <>
-	inline bool updateValue<qreal>(qreal& member, const qreal& newValue) { // αυτο ισχυει μονο  για qreal, γιατι ειναι float και δεν μπορουμε να χρησιμοποιησουμε το == με float
+    // ΑΠΛΟ OVERLOAD - ΟΧΙ TEMPLATE SPECIALIZATION
+    inline bool updateValue(qreal& member, const qreal& newValue) {
         if (qFuzzyCompare(member, newValue)) {
             return false;
         }

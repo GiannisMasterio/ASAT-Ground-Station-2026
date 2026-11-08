@@ -38,6 +38,9 @@ constexpr int DEFAULT_MQTT_PORT = 8883;
 constexpr int MQTT_DELAY = 10; // ms
 constexpr int GRAPHIC_UPDATES_REFRESH_RATE = 80; 
 
+constexpr int MIN_THROTTLE = 1130; // ms
+constexpr int MAX_THROTTLE = 2000; // ms
+
 constexpr int RES_WIDTH = 1920;
 constexpr int RES_HEIGHT = 1080;
 

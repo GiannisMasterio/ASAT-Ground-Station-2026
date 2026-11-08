@@ -42,6 +42,9 @@ struct CalibrationConfig {
     double current_offset = 0.0;
 
     float gravity = 9.81f;
+
+    int min_throttle = MIN_THROTTLE;
+    int max_throttle = MAX_THROTTLE;
 };
 
 struct MqttConfig {

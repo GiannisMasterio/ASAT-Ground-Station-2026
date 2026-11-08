@@ -29,10 +29,10 @@ public:
     QMap<QString, QPair<unsigned int, unsigned int>> mode_value_limits;
 
     void updateTelemetry(QMap<QString, double> value_keeper);
-    void executeEmergencyStop();
 
     TelemetryData tel;
     MqttConfig mqttcfg;
+	CalibrationConfig cal;
 
     AudioHandler* audio_handler = nullptr;
 
@@ -44,9 +44,6 @@ public:
     void start_mqtt();
     void disconnect_mqtt();
     void change_mqtt_topic();
-
-    void set_function_mode(QString new_function_mode);
-    QString get_function_mode();
 
     QStringList getAvailablePorts();
     bool connectSerial(const QString& portName, int baudrate);
@@ -143,14 +140,7 @@ private:
 
     QTimer* mqtt_data_timer = nullptr;
 
-    double calibrate_current(double value);
-    double calibrate_thrust(double value);
     double RPMFilter(double new_rpm);
-
-    void publishThrottle(int new_throttle);
-
-    void createSliderWindow();
-    void initialize_stabilizing_thrust();
 
 signals:
     void publishMqtt(const QString& topic, const QString& payload);
@@ -165,12 +155,6 @@ signals:
     void loggingStateChanged(bool logging);
 
 public slots:
-
-    void manualToggleEvent(int state);
-    void handleMode();
-    void openSliderWindow();
-    void updateSliderValue(int sliderValue);
-    void setValue(double newValue) { slider_stored_value = newValue; }
 
     void updateMqttSendTopic(const QString& newTopic);
 

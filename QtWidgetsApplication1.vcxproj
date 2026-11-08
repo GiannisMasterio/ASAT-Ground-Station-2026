@@ -123,17 +123,16 @@ Qt6Mqtt.lib;%(AdditionalDependencies)</AdditionalDependencies>
   </ItemDefinitionGroup>
   <ItemGroup>
     <QtMoc Include="GcsGUI.h" />
-    <QtMoc Include="BigBatteryWidget.h" />
     <ClCompile Include="BackendHandler.cpp" />
-    <ClCompile Include="containers.cpp" />
-    <QtMoc Include="Gauge.h" />
-    <ClCompile Include="graphcontainer.cpp" />
-    <ClCompile Include="mqttclient.cpp" />
-    <ClCompile Include="qcustomplot.cpp" />
+    <ClCompile Include="Containers.cpp" />
+    <ClCompile Include="GraphContainer.cpp" />
+    <ClCompile Include="MqttClient.cpp" />
+    <ClCompile Include="QCustomPlot.cpp" />
     <ClCompile Include="GcsGUI.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <QtMoc Include="hudwidgets.h" />
     <ClInclude Include="VarState.h" />
     <QtMoc Include="audiohandler.h">
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">"$(QtMsBuild)\qt_vars.target" "$(QtMsBuild)\qt_moc.target"</Command>

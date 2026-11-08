@@ -26,13 +26,13 @@
     <ClCompile Include="GcsGUI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="qcustomplot.cpp">
+    <ClCompile Include="QCustomPlot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="graphcontainer.cpp">
+    <ClCompile Include="GraphContainer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="mqttclient.cpp">
+    <ClCompile Include="MqttClient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="BackendHandler.cpp">
@@ -40,10 +40,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="containers.cpp">
+    <ClCompile Include="Containers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -66,16 +66,13 @@
     <QtMoc Include="mqttclient.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="Gauge.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
     <QtMoc Include="BatteryWidget.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="BigBatteryWidget.h">
+    <QtMoc Include="Backendhandler.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="Backendhandler.h">
+    <QtMoc Include="hudwidgets.h">
       <Filter>Header Files</Filter>
     </QtMoc>
   </ItemGroup>

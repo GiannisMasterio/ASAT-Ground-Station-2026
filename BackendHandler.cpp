@@ -17,12 +17,12 @@
 #include "graphcontainer.h"
 #include <QFrame>
 #include <QtSerialPort/QSerialPortInfo>
+#include "VarState.h"
 
 using namespace std;
 
 BackendHandler::BackendHandler(QObject* parent, QObject* defaultValue) :
-    QObject(parent),
-    mode(default_mode)
+    QObject(parent)
 {
     serial_port = new QSerialPort(this);
     mqtt_data_timer = new QTimer(this);
@@ -39,23 +39,7 @@ BackendHandler::BackendHandler(QObject* parent, QObject* defaultValue) :
     audio_handler = new AudioHandler(this);
 }
 
-void BackendHandler::updateTelemetry(QMap<QString, double> value_keeper) {
 
-    tel.rpm = value_keeper.value("RPM", tel.rpm);
-    tel.current = calibrate_current(value_keeper.value("Current", tel.current)) + cal.current_offset;
-    tel.voltage = value_keeper.value("Voltage", tel.voltage);
-    tel.throttle = value_keeper.value("Throttle", tel.throttle);
-    tel.power = tel.voltage * tel.current;
-
-    if (use_rpm_filter) {
-        tel.rpm = RPMFilter(tel.rpm);
-    }
-    else {
-        RPMFilter(tel.rpm);
-    }
-
-    emit telemetryUpdated();
-}
 
 double BackendHandler::RPMFilter(double new_rpm) {
     rpm_buffer.push_back(new_rpm);
@@ -70,27 +54,7 @@ double BackendHandler::RPMFilter(double new_rpm) {
     return sorted_buffer[sorted_buffer.size() / 2];
 }
 
-double BackendHandler::calibrate_current(double esp_current) {
-    if (!cal.manual_current_calibration) return esp_current;
-    double rawC_avg = esp_current / cal.current_lsb_user_esp;
-    double new_current = rawC_avg * cal.current_lsb_user_selected;
-    return new_current;
-}
-
-double BackendHandler::calibrate_thrust(double esp_newton) {
-    if (!cal.manual_thrust_calibration || cal.thrust_calibration_factor == 0) return esp_newton;
-    double esp_grams = esp_newton * 1000.0 / 9.81;
-    double raw_avg = cal.esp_actual_tare_offset - esp_grams * cal.esp_thrust_calibration_factor;
-
-    double new_grams = cal.direction_sign * (raw_avg - cal.tare_newton_offset) / cal.thrust_calibration_factor;
-    double new_newton = (new_grams / 1000.0) * cal.gravity;
-    return new_newton;
-}
-
-void BackendHandler::playAudio(int volume, QString audio_tag) {
-    if (audio_handler) audio_handler->playSound(volume, audio_tag);
-}
-
+// Telemetry Functions
 void BackendHandler::receiveTelemetry(const QString& data, QString source) {
 
     if (source != selected_data_source) return;
@@ -141,10 +105,6 @@ void BackendHandler::receiveTelemetry(const QString& data, QString source) {
 
     bool previous_write_status = write_logs;
 
-    if (cfg.windtunnel_transitioning) write_logs = false;
-    else if (cfg.log_only_during_experiment) write_logs = experiment_running;
-    else write_logs = true;
-
     if (tel.voltage == battery_removed_voltage_value) tel.voltage = 0;
 
     if (tel.voltage == 0) {
@@ -160,6 +120,24 @@ void BackendHandler::receiveTelemetry(const QString& data, QString source) {
     }
 
     logToFile(true);
+}
+
+void BackendHandler::updateTelemetry(QMap<QString, double> value_keeper) {
+
+    tel.rpm = value_keeper.value("RPM", tel.rpm);
+    tel.current = value_keeper.value("Current", tel.current);
+    tel.voltage = value_keeper.value("Voltage", tel.voltage);
+    tel.throttle = value_keeper.value("Throttle", tel.throttle);
+    tel.power = tel.voltage * tel.current;
+
+    if (use_rpm_filter) {
+        tel.rpm = RPMFilter(tel.rpm);
+    }
+    else {
+        RPMFilter(tel.rpm);
+    }
+
+    emit telemetryUpdated();
 }
 
 void BackendHandler::initLogFile() {
@@ -202,15 +180,11 @@ void BackendHandler::logToFile(bool status) {
     QVector<QPair<QString, QString>> log_columns = {
         { "Timestamp",                 timestamp },
         { "Thrust (N)",                QString::number(tel.thrust, 'f', 2) },
-        { "Torque (N*m)",              QString::number(tel.torque, 'f', 3) },
         { "Voltage (V)",               QString::number(tel.voltage, 'f', 2) },
         { "Current (A)",               QString::number(tel.current, 'f', 2) },
         { "RPM",                       QString::number(tel.rpm, 'f', 0) },
         { "Throttle (%)",              QString::number(throttle_pct, 'f', 2) },
-        { "Power (W)",                 QString::number(tel.power, 'f', 2) },
-        { "Propeller Name",            cfg.propeller_name },
-        { "AOA (deg)",                 QString::number(cfg.angle_of_attack, 'f', 2) },
-        { "Airspeed (m/sec)",          QString::number(cfg.airspeed, 'f', 2) }
+        { "Power (W)",                 QString::number(tel.power, 'f', 2) }
     };
 
     QTextStream out(&file);
@@ -428,7 +402,15 @@ void BackendHandler::updateMqttData() {
     }
 }
 
-// ----------------------------------------------------------
+void BackendHandler::updateMqttSendTopic(const QString& newTopic) {
+    mqttcfg.mqtt_send_topic = newTopic;
+    qDebug() << "ModeHandler MQTT Topic updated to:" << newTopic;
+}
+// SOUND HANDLER FUNCTIONS
+void BackendHandler::playAudio(int volume, QString audio_tag) {
+    if (audio_handler) audio_handler->playSound(volume, audio_tag);
+}
+
 bool BackendHandler::isSoundPlaying(QString audio) {
     return audio_handler ? audio_handler->isSoundPlaying(audio) : false;
 }
@@ -438,57 +420,12 @@ void BackendHandler::setSoundStatus(bool sound_status) {
         audio_handler->setSoundStatus(sound_status);
     }
 }
-
+// ------------------------------------------------------------------------
 double BackendHandler::getThrottlePercentage(int current_throttle) {
 
-    if (cfg.max_throttle <= cfg.min_throttle)
+    if (cal.max_throttle <= cal.min_throttle)
         return 0.0;
 
-    return 100.0 * (current_throttle - cfg.min_throttle) / (cfg.max_throttle - cfg.min_throttle);
-}
-
-void BackendHandler::updateMqttSendTopic(const QString& newTopic) {
-    mqttcfg.mqtt_send_topic = newTopic;
-    qDebug() << "ModeHandler MQTT Topic updated to:" << newTopic;
-}
-
-void BackendHandler::manualToggleEvent(int state) {
-    qDebug() << "Toggle State Changed" << state;
-
-    if (state == Qt::Checked) {
-        mode = "AUTO";
-        qDebug() << "Mode changed to AUTO";
-        if (slider_opener_button) {
-            slider_opener_button->setText("Set RPM");
-        }
-    }
-    else if (state == Qt::Unchecked) {
-        mode = "MANUAL";
-        qDebug() << "Mode changed to MANUAL";
-        if (slider_opener_button) {
-            slider_opener_button->setText("Set Throttle");
-        }
-    }
-
-    emit modeChanged(mode);
-}
-
-void BackendHandler::handleMode() {
-    if (mode == "AUTO") {
-        int new_throttle = -1.0;
-        double lower_bound = target_rpm - cfg.rpm_clemency;
-        double upper_bound = target_rpm + cfg.rpm_clemency;
-
-        if (tel.rpm < lower_bound) {
-            new_throttle = tel.throttle + cfg.throttle_increase_step;
-        }
-        else if (tel.rpm > upper_bound) {
-            new_throttle = tel.throttle - cfg.throttle_increase_step;
-        }
-
-        if (new_throttle >= cfg.min_throttle && new_throttle <= cfg.max_throttle) {
-            publishThrottle(new_throttle);
-        }
-    }
+    return 100.0 * (current_throttle - cal.min_throttle) / (cal.max_throttle - cal.min_throttle);
 }
 

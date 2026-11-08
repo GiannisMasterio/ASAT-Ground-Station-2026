@@ -3,9 +3,7 @@
 
 #include <QWidget>
 #include <QFrame>
-#include "Gauge.h"
-#include "BigBatteryWidget.h"
-
+#include "hudwidgets.h"
 class QLabel;
 class QProgressBar;
 class QCheckBox;

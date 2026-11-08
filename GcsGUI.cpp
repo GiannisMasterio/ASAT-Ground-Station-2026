@@ -18,6 +18,8 @@ QString HOVERED_STYLE_SETTINGS = QString(
 
 GcsGUI::GcsGUI(QWidget* parent) : QMainWindow(parent)
 {    
+    backend_handler = new BackendHandler(this, nullptr);
+
     setWindowTitle(WINDOW_NAME);
     resize(RES_WIDTH, RES_HEIGHT);
     this->setWindowIcon(QIcon(ICONPATH));
@@ -36,15 +38,12 @@ GcsGUI::GcsGUI(QWidget* parent) : QMainWindow(parent)
     controlSurfacesSceneWidget = new QWidget();
     EarthProjectionSceneWidget = new QWidget();
 
-    batteryIndicator = new BatteryWidget();
-    batteryIndicator->setObjectName("MyBatteryWidget");
-
     sceneStack->addWidget(mainSceneWidget);  // Index 0
     sceneStack->addWidget(controlSurfacesSceneWidget); // Index 1
     sceneStack->addWidget(EarthProjectionSceneWidget); // Index 2
 
     createMainScene();
-    createControlSurfacesScene(); 
+    createControlSurfacesScene();
     createEarthProjectionScene();
 
     sceneStack->setCurrentIndex(0);
@@ -54,10 +53,10 @@ GcsGUI::GcsGUI(QWidget* parent) : QMainWindow(parent)
     initLogFile();
 
     connect(graphic_timer, &QTimer::timeout, this, &GcsGUI::graphicUpdates);
-    connect(mqtt_data_timer, &QTimer::timeout, this, &GcsGUI::updateMqttData);
+    connect(mqtt_data_timer, &QTimer::timeout, backend_handler, &BackendHandler::updateMqttData);
 
     mqtt_data_timer->start(MQTT_DELAY);
-    start_mqtt();
+    backend_handler->start_mqtt();
 }
 
 GcsGUI::~GcsGUI()
@@ -90,7 +89,7 @@ void GcsGUI::close_program() {
     running = false;
     logToFile(false);
     handleSerial(false);
-    disconnect_mqtt();
+    backend_handler->disconnect_mqtt();
 }
 
 void GcsGUI::set_colors() {
@@ -635,12 +634,17 @@ void GcsGUI::setup3DView(QGridLayout* layout) {
 QFrame* GcsGUI::createBottomToolbar() {
 
     QFrame* toolbarFrame = new QFrame();
-    toolbarFrame->setFixedHeight(100); 
+    toolbarFrame->setObjectName("BottomToolbar");
+    toolbarFrame->setFixedHeight(100);
     toolbarFrame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     toolbarFrame->setStyleSheet(
-        "QFrame {" "   background-image: none;"  "   background-color: #121212;"          
-        "   border-top: 1px solid #444;"  "   border-bottom: none;" "   border-left: none;"    
-        "   border-right: none;" "}");
+        "QFrame#BottomToolbar {"
+        "   background-color: rgba(8, 14, 28, 230);"
+        "   border-top: 1px solid rgba(255, 255, 255, 40);"
+        "   border-bottom: none; border-left: none; border-right: none;"
+        "}"
+    );
+
     QHBoxLayout* toolbarLayout = new QHBoxLayout(toolbarFrame);
     toolbarLayout->setContentsMargins(20, 0, 20, 0);
     toolbarLayout->setSpacing(10);
@@ -750,10 +754,19 @@ QFrame* GcsGUI::createBottomToolbar() {
 
     auto createBottomButton = [&](const QString& text, void (GcsGUI::*slotmethod)() ) {
         QPushButton* btn = new QPushButton(text);
-        if (text == "Choose Log Location") // χρειαζεται περισσοτερο χωρο το συγκεκριμενο
-         btn->setFixedSize(310, 70);
-        else btn->setFixedSize(270, 70);
-        btn->setStyleSheet(HOVERED_STYLE);
+        btn->setFixedSize(text == "Choose Log Location" ? 290 : 250, 56);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(QString(
+            "QPushButton {"
+            "   background-color: rgba(255, 255, 255, 12);"
+            "   color: #e2e8f0;"
+            "   border: 1px solid rgba(255, 255, 255, 70);"
+            "   border-radius: 28px;"
+            "   font-family: 'Segoe UI'; font-size: 20px; font-weight: 600;"
+            "}"
+            "QPushButton:hover { background-color: rgba(30, 144, 255, 60); border-color: %1; color: white; }"
+            "QPushButton:pressed { background-color: rgba(30, 144, 255, 110); }"
+        ).arg(THEME_COLOR));
         QObject::connect(btn, &QPushButton::clicked, this, [this, slotmethod]() {
              this->audio_handler->playSound(audio_click_sfx_volume, "MainClick");
              (this->*slotmethod)();
@@ -1239,105 +1252,131 @@ void GcsGUI::readSerialData() {
 }
 
 void GcsGUI::serial_control() {
-
     QWidget* selection_window = new QWidget(nullptr, Qt::Window);
+    selection_window->setObjectName("ModernDialog");
     selection_window->setWindowTitle("Serial Control");
-    
-    selection_window->setFixedSize(600, 300);
+    selection_window->setMinimumSize(600, 560);
     selection_window->setWindowModality(Qt::ApplicationModal);
     selection_window->setAttribute(Qt::WA_DeleteOnClose);
+    selection_window->setAttribute(Qt::WA_StyledBackground, true);
     selection_window->setWindowIcon(QIcon(ICONPATH));
+    selection_window->setStyleSheet(DIALOG_STYLE);
 
     QVBoxLayout* layout = new QVBoxLayout(selection_window);
-    QFont labelFont("Arial", 14, QFont::Bold);
-    QFont widgetFont("Arial", 11);
+    layout->setContentsMargins(32, 28, 32, 28);
+    layout->setSpacing(12);
 
-    QLabel* label1 = new QLabel("Available COM Ports:", selection_window);
-    label1->setFont(labelFont);
-    layout->addWidget(label1);
-
-    QComboBox* dropdown1 = new QComboBox(selection_window);
-    dropdown1->setFont(widgetFont);
-    QStringList ports;
-    for (const QSerialPortInfo& info : QSerialPortInfo::availablePorts()) {
-        ports << info.portName();
-    }
-    dropdown1->addItems(ports);
-    if (!com_port.isEmpty() && ports.contains(com_port)) {
-        dropdown1->setCurrentText(com_port);
-    }
-    layout->addWidget(dropdown1);
-
-    QLabel* label2 = new QLabel("Choose Baudrate:", selection_window);
-    label2->setFont(labelFont);
-    layout->addWidget(label2);
-
-    QComboBox* dropdown2 = new QComboBox(selection_window);
-    dropdown2->setFont(widgetFont);
-    dropdown2->addItems(baudrates);
-    dropdown2->setCurrentText(QString::number(baudrate));
-    layout->addWidget(dropdown2);
-
-    QPushButton* confirmButton = new QPushButton("Connect", selection_window);
-    confirmButton->setFont(widgetFont);
-    confirmButton->setStyleSheet(HOVERED_STYLE);
-    layout->addWidget(confirmButton);
-
-    auto updateButtonState = [=]() {
-        // Ελέγχει αν η επιλογή των dropdowns ταυτίζεται με την ενεργή σύνδεση
-        bool isCurrentActiveConnection = (serial_port && serial_port->isOpen() && com_port == dropdown1->currentText() &&
-            baudrate == dropdown2->currentText().toInt());
-
-        if (isCurrentActiveConnection) {
-            confirmButton->setText("Connected ✓");
-            confirmButton->setStyleSheet("background-color: green; color: white; font-weight: bold;");
-        }
-        else {
-            confirmButton->setText("Connect");
-            confirmButton->setStyleSheet(HOVERED_STYLE);
-        }
-        confirmButton->setEnabled(true);
+    // Μικρά labels με κεφαλαία και απόσταση γραμμάτων
+    auto makeSectionLabel = [selection_window](const QString& text) {
+        QLabel* l = new QLabel(text, selection_window);
+        l->setObjectName("SectionLabel");
+        QFont f("Segoe UI", 10, QFont::DemiBold);
+        f.setLetterSpacing(QFont::AbsoluteSpacing, 2);
+        l->setFont(f);
+        return l;
         };
 
-    connect(dropdown1, &QComboBox::currentTextChanged, this, [=]() { updateButtonState(); });
-    connect(dropdown2, &QComboBox::currentTextChanged, this, [=]() { updateButtonState(); });
+    // --- Επικεφαλίδα ---
+    QLabel* header = new QLabel("SERIAL CONTROL", selection_window);
+    header->setObjectName("DialogHeader");
+    QFont hf("Segoe UI", 15, QFont::DemiBold);
+    hf.setLetterSpacing(QFont::AbsoluteSpacing, 3);
+    header->setFont(hf);
+    header->setAlignment(Qt::AlignCenter);
+    layout->addWidget(header);
+    layout->addSpacing(10);
 
-    // Initial Call
-    updateButtonState();
+    // --- COM port ---
+    layout->addWidget(makeSectionLabel("AVAILABLE COM PORTS"));
 
-    connect(confirmButton, &QPushButton::clicked, this, [=]() {
+    QComboBox* dropdown1 = new QComboBox(selection_window);
+    dropdown1->setMinimumHeight(40);
 
-        if (serial_port && serial_port->isOpen() && com_port == dropdown1->currentText() && baudrate == dropdown2->currentText().toInt()) {
-            return;
-        }
+    QStringList ports = backend_handler->getAvailablePorts();
+    dropdown1->addItems(ports);
 
-        confirmButton->setEnabled(false);
-        confirmButton->setText("Connecting...");
-        confirmButton->setStyleSheet("background-color: #ff9800; color: white; font-weight: bold;"); // Πορτοκαλί
-        QCoreApplication::processEvents(); // Ζωγραφίζει το UI άμεσα
+    QString current_port = backend_handler->serial_com_port_tag;
+    if (!current_port.isEmpty() && ports.contains(current_port)) {
+        dropdown1->setCurrentText(current_port);
+    }
+    layout->addWidget(dropdown1);
+    layout->addSpacing(6);
 
-        com_port = dropdown1->currentText();
-        baudrate = dropdown2->currentText().toInt();
-        audio_handler->playSound(audio_click_sfx_volume, "MainClick");
+    // --- Baudrate ---
+    layout->addWidget(makeSectionLabel("BAUDRATE"));
 
-        confirmPort();
+    QComboBox* dropdown2 = new QComboBox(selection_window);
+    dropdown2->setMinimumHeight(40);
+    dropdown2->addItems(backend_handler->baudrates);
+    dropdown2->setCurrentText(QString::number(backend_handler->serial_baudrate));
+    layout->addWidget(dropdown2);
+    layout->addSpacing(8);
 
-        if (serial_port && serial_port->isOpen()) {
-            updateButtonState(); 
+    // --- Connect ---
+    QPushButton* confirmButton = new QPushButton("Connect", selection_window);
+    confirmButton->setObjectName("PrimaryButton");
+    confirmButton->setFixedHeight(46);
+    confirmButton->setCursor(Qt::PointingHandCursor);
+    layout->addWidget(confirmButton);
+
+    // --- Διαχωριστική γραμμή ---
+    layout->addSpacing(10);
+    QFrame* line = new QFrame(selection_window);
+    line->setFixedHeight(1);
+    line->setStyleSheet("background-color: rgba(255,255,255,40); border: none;");
+    layout->addWidget(line);
+    layout->addSpacing(10);
+
+    // --- Αποστολή εντολής ---
+    layout->addWidget(makeSectionLabel("SEND COMMAND"));
+
+    QLineEdit* commandInput = new QLineEdit(selection_window);
+    commandInput->setMinimumHeight(40);
+    commandInput->setPlaceholderText("Enter command...");
+    layout->addWidget(commandInput);
+
+    QPushButton* sendButton = new QPushButton("Send", selection_window);
+    sendButton->setFixedHeight(46);
+    sendButton->setCursor(Qt::PointingHandCursor);
+    sendButton->setEnabled(backend_handler->isSerialConnected());
+    layout->addWidget(sendButton);
+
+    layout->addStretch();
+
+    // --- Connect ---
+    connect(confirmButton, &QPushButton::clicked, this, [this, dropdown1, dropdown2, sendButton, confirmButton]() {
+        bool success = backend_handler->connectSerial(dropdown1->currentText(), dropdown2->currentText().toInt());
+
+        if (success) {
+            sendButton->setEnabled(true);
+            confirmButton->setText("Connected ✓");
+            confirmButton->setStyleSheet(
+                "QPushButton { background-color: rgba(16,185,129,45); color: #34d399;"
+                "  border: 1px solid #10b981; border-radius: 22px; font-size: 15px; font-weight: 600; }");
         }
         else {
-            confirmButton->setText("Connection Failed ✖");
-            confirmButton->setStyleSheet("background-color: red; color: white; font-weight: bold;");
-            confirmButton->setEnabled(true);
-
-            QTimer::singleShot(2000, selection_window, [=]() {
-                updateButtonState();
-                });
+            confirmButton->setText("Connection Failed");
+            confirmButton->setStyleSheet(
+                "QPushButton { background-color: rgba(239,68,68,45); color: #f87171;"
+                "  border: 1px solid #ef4444; border-radius: 22px; font-size: 15px; font-weight: 600; }");
         }
         });
 
+    // --- Send ---
+    auto sendAction = [this, commandInput]() {
+        QString cmd = commandInput->text();
+        if (!cmd.isEmpty()) {
+            backend_handler->serial_sendCommand(cmd);
+            commandInput->clear();
+        }
+        };
+
+    connect(sendButton, &QPushButton::clicked, this, sendAction);
+    connect(commandInput, &QLineEdit::returnPressed, this, sendAction);
+
     selection_window->show();
 }
+
 
 void GcsGUI::confirmPort() {
     qDebug() << "Selected COM port:" << com_port;
@@ -1349,137 +1388,175 @@ void GcsGUI::confirmPort() {
 void GcsGUI::setupSettingsFields() {
     settings_fields = QVector<SettingsElements>{
         // --- General / Audio ---
-        { "Sound", "", "", false, &this->soundOn, SettingsElements::Bool },
-        { "Audio Click Sound Volume", "", "", true, &this->audio_click_sfx_volume, SettingsElements::Int },
-        { "Write Logs", "", "", false, &this->write_logs, SettingsElements::Bool },
-        { "MQTT Topic", "", "", false, &this->mqtt_receive_topic, SettingsElements::String },
-        { "MQTT Broker", "", "", false, &this->mqtt_broker, SettingsElements::String },
-        { "MQTT Port", "", "", true, &this->mqtt_port, SettingsElements::Int },
-        { "Min Battery Voltage", "", "", true, &min_batt_voltage, SettingsElements::Double },
-        { "Max Battery Voltage", "", "", true, &max_batt_voltage, SettingsElements::Double },
+        SettingsElements(QString("Sound"), QString(""), QString(""), false, (void*)&this->soundOn, SettingsElements::Bool),
+        SettingsElements(QString("Audio Click Sound Volume"), QString(""), QString(""), true, (void*)&this->audio_click_sfx_volume, SettingsElements::Int),
+        SettingsElements(QString("Write Logs"), QString(""), QString(""), false, (void*)&this->write_logs, SettingsElements::Bool),
+        SettingsElements(QString("MQTT Topic"), QString(""), QString(""), false, (void*)&this->mqtt_receive_topic, SettingsElements::String),
+        SettingsElements(QString("MQTT Broker"), QString(""), QString(""), false, (void*)&this->mqtt_broker, SettingsElements::String),
+        SettingsElements(QString("MQTT Port"), QString(""), QString(""), true, (void*)&this->mqtt_port, SettingsElements::Int),
+        SettingsElements(QString("Min Battery Voltage"), QString(""), QString(""), true, (void*)&min_batt_voltage, SettingsElements::Double),
+        SettingsElements(QString("Max Battery Voltage"), QString(""), QString(""), true, (void*)&max_batt_voltage, SettingsElements::Double),
+
         // --- PWM Bounds ---
-        { "Min Motor (us)", "", "", true, &motor.low_pwm_value, SettingsElements::Int },
-        { "Max Motor (us)", "", "", true, &motor.high_pwm_value, SettingsElements::Int },
-        { "Min Rudder (us)", "", "", true, &rudder.low_pwm_value, SettingsElements::Int },
-        { "Max Rudder (us)", "", "", true, &rudder.high_pwm_value, SettingsElements::Int },
-        { "Min Elevator (us)", "", "", true, &elevator.low_pwm_value, SettingsElements::Int },
-        { "Max Elevator (us)", "", "", true, &elevator.high_pwm_value, SettingsElements::Int },
-        { "Min Left Aileron (us)", "", "", true, &left_aileron.low_pwm_value, SettingsElements::Int },
-        { "Max Left Aileron (us)", "", "", true, &left_aileron.high_pwm_value, SettingsElements::Int },
-        { "Min Right Aileron (us)", "", "", true, &right_aileron.low_pwm_value, SettingsElements::Int },
-        { "Max Right Aileron (us)", "", "", true, &right_aileron.high_pwm_value, SettingsElements::Int },
-        { "Min Left Flap (us)", "", "", true, &left_flap.low_pwm_value, SettingsElements::Int },
-        { "Max Left Flap (us)", "", "", true, &left_flap.high_pwm_value, SettingsElements::Int },
-        { "Min Right Flap (us)", "", "", true, &right_flap.low_pwm_value, SettingsElements::Int },
-        { "Max Right Flap (us)", "", "", true, &right_flap.high_pwm_value, SettingsElements::Int },
-        { "Min Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.low_pwm_value, SettingsElements::Int },
-        { "Max Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.high_pwm_value, SettingsElements::Int },
-        { "Min Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.low_pwm_value, SettingsElements::Int },
-        { "Max Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.high_pwm_value, SettingsElements::Int },
+        SettingsElements(QString("Min Motor (us)"), QString(""), QString(""), true, (void*)&motor.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Motor (us)"), QString(""), QString(""), true, (void*)&motor.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Rudder (us)"), QString(""), QString(""), true, (void*)&rudder.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Rudder (us)"), QString(""), QString(""), true, (void*)&rudder.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Elevator (us)"), QString(""), QString(""), true, (void*)&elevator.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Elevator (us)"), QString(""), QString(""), true, (void*)&elevator.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Left Aileron (us)"), QString(""), QString(""), true, (void*)&left_aileron.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Left Aileron (us)"), QString(""), QString(""), true, (void*)&left_aileron.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Right Aileron (us)"), QString(""), QString(""), true, (void*)&right_aileron.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Right Aileron (us)"), QString(""), QString(""), true, (void*)&right_aileron.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Left Flap (us)"), QString(""), QString(""), true, (void*)&left_flap.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Left Flap (us)"), QString(""), QString(""), true, (void*)&left_flap.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Right Flap (us)"), QString(""), QString(""), true, (void*)&right_flap.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Right Flap (us)"), QString(""), QString(""), true, (void*)&right_flap.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Landing Gear 1 Flap (us)"), QString(""), QString(""), true, (void*)&landing_gear1.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Landing Gear 1 Flap (us)"), QString(""), QString(""), true, (void*)&landing_gear1.high_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Min Landing Gear 2 Flap (us)"), QString(""), QString(""), true, (void*)&landing_gear2.low_pwm_value, SettingsElements::Int),
+        SettingsElements(QString("Max Landing Gear 2 Flap (us)"), QString(""), QString(""), true, (void*)&landing_gear2.high_pwm_value, SettingsElements::Int),
 
         // --- Transmitter Channel Mapping ---
-        { "Motor Channel", "", "", true, &motor.channel, SettingsElements::Int },
-        { "Rudder Channel", "", "", true, &rudder.channel, SettingsElements::Int },
-        { "Elevator Channel", "", "", true, &elevator.channel, SettingsElements::Int },
-        { "Left Aileron Channel", "", "", true, &left_aileron.channel, SettingsElements::Int },
-        { "Right Aileron Channel", "", "", true, &right_aileron.channel, SettingsElements::Int },
-        { "Left Flap Channel", "", "", true, &left_flap.channel, SettingsElements::Int },
-        { "Right Flap Channel", "", "", true, &right_flap.channel, SettingsElements::Int },
-        { "Arm Switch Channel", "", "", true, &arm_status_switch.channel, SettingsElements::Int },
-        { "Landing Gear 1 Channel", "", "", true, &landing_gear1.channel, SettingsElements::Int },
-        { "Landing Gear 2 Channel", "", "", true, &landing_gear2.channel, SettingsElements::Int }
-
+        SettingsElements(QString("Motor Channel"), QString(""), QString(""), true, (void*)&motor.channel, SettingsElements::Int),
+        SettingsElements(QString("Rudder Channel"), QString(""), QString(""), true, (void*)&rudder.channel, SettingsElements::Int),
+        SettingsElements(QString("Elevator Channel"), QString(""), QString(""), true, (void*)&elevator.channel, SettingsElements::Int),
+        SettingsElements(QString("Left Aileron Channel"), QString(""), QString(""), true, (void*)&left_aileron.channel, SettingsElements::Int),
+        SettingsElements(QString("Right Aileron Channel"), QString(""), QString(""), true, (void*)&right_aileron.channel, SettingsElements::Int),
+        SettingsElements(QString("Left Flap Channel"), QString(""), QString(""), true, (void*)&left_flap.channel, SettingsElements::Int),
+        SettingsElements(QString("Right Flap Channel"), QString(""), QString(""), true, (void*)&right_flap.channel, SettingsElements::Int),
+        SettingsElements(QString("Arm Switch Channel"), QString(""), QString(""), true, (void*)&arm_status_switch.channel, SettingsElements::Int),
+        SettingsElements(QString("Landing Gear 1 Channel"), QString(""), QString(""), true, (void*)&landing_gear1.channel, SettingsElements::Int),
+        SettingsElements(QString("Landing Gear 2 Channel"), QString(""), QString(""), true, (void*)&landing_gear2.channel, SettingsElements::Int)
     };
 }
 
 void GcsGUI::chooseSettings() {
 
     QWidget* settings_window = new QWidget(nullptr, Qt::Window);
+    settings_window->setObjectName("ModernDialog");
     settings_window->setWindowTitle("Settings");
-    settings_window->setFixedSize(500, 750);
+    settings_window->setFixedSize(600, 740);
     settings_window->setWindowModality(Qt::ApplicationModal);
     settings_window->setAttribute(Qt::WA_DeleteOnClose);
+    settings_window->setAttribute(Qt::WA_StyledBackground, true);
     settings_window->setWindowIcon(QIcon(ICONPATH));
+    settings_window->setStyleSheet(DIALOG_STYLE);
+
+    // Όταν το παράθυρο καταστραφεί, τα widgets του πεθαίνουν μαζί του: μηδενίζουμε τα pointers
+    connect(settings_window, &QObject::destroyed, this, [this]() {
+        for (auto& f : settings_fields) { f.label = nullptr; f.entry = nullptr; }
+        });
 
     QVBoxLayout* main_layout = new QVBoxLayout(settings_window);
+    main_layout->setContentsMargins(28, 24, 28, 24);
+    main_layout->setSpacing(16);
+
+    QLabel* header = new QLabel("SETTINGS", settings_window);
+    header->setObjectName("DialogHeader");
+    QFont hf("Segoe UI", 15, QFont::DemiBold);
+    hf.setLetterSpacing(QFont::AbsoluteSpacing, 3);
+    header->setFont(hf);
+    header->setAlignment(Qt::AlignCenter);
+    main_layout->addWidget(header);
+
     QTabWidget* tabWidget = new QTabWidget(settings_window);
+    tabWidget->tabBar()->setExpanding(true);
+    tabWidget->tabBar()->setDrawBase(false);
 
-    QWidget* generalTab = new QWidget(), * audioTab = new QWidget(), * controlsurfacesTab = new QWidget(), * tcmTab = new QWidget();
+    // --- Στυλ του scroll: ο selector είναι με objectName, ώστε να μη χύνεται στα πεδία ---
+    const QString scrollStyle =
+        "QScrollArea { background: transparent; border: none; }"
+        "QWidget#ScrollViewport, QWidget#ScrollContent { background: transparent; }"
+        "QScrollBar:vertical { background: transparent; width: 8px; margin: 0; }"
+        "QScrollBar::handle:vertical { background: rgba(255,255,255,60); border-radius: 4px; min-height: 24px; }"
+        "QScrollBar::handle:vertical:hover { background: rgba(255,255,255,100); }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }";
 
-    QVBoxLayout* generalLayout = new QVBoxLayout(generalTab),
-        * audioLayout = new QVBoxLayout(audioTab), * tcmLayout = new QVBoxLayout(tcmTab);
+    // Κάθε tab είναι scroll area: τίποτα δεν στριμώχνεται όσα πεδία κι αν έχει
+    auto makeScrollTab = [&](QVBoxLayout*& contentLayout) -> QWidget* {
+        QWidget* tab = new QWidget();
+        QVBoxLayout* tabLayout = new QVBoxLayout(tab);
+        tabLayout->setContentsMargins(4, 8, 4, 8);
 
-    QScrollArea* controlsurfacesScrollArea = new QScrollArea();
-    QWidget* controlsurfacesScrollWidget = new QWidget();
-    QVBoxLayout* controlsurfacesLayout = new QVBoxLayout(controlsurfacesScrollWidget);
-    controlsurfacesScrollArea->setWidget(controlsurfacesScrollWidget);
-    controlsurfacesScrollArea->setWidgetResizable(true);
-    controlsurfacesScrollArea->setFrameShape(QFrame::NoFrame);
-    QVBoxLayout* controlsurfacesTabMainLayout = new QVBoxLayout(controlsurfacesTab);
-    controlsurfacesTabMainLayout->addWidget(controlsurfacesScrollArea);
+        QScrollArea* area = new QScrollArea(tab);
+        area->setWidgetResizable(true);
+        area->setFrameShape(QFrame::NoFrame);
+        area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        area->viewport()->setObjectName("ScrollViewport");
+        area->setStyleSheet(scrollStyle);
 
-    settings_fields = QVector<SettingsElements>{
-        {"Sound", "", "", false, &this->soundOn, SettingsElements::Bool},
-        {"Audio Click Sound Volume", "", "", true, &this->audio_click_sfx_volume, SettingsElements::Int},
-        {"Write Logs", "", "", false, &this->write_logs, SettingsElements::Bool},
-        {"MQTT Topic", "", "", false, &this->mqtt_receive_topic, SettingsElements::String},
-        {"MQTT Broker", "", "", false, &this->mqtt_broker, SettingsElements::String},
-        {"MQTT Port", "", "", true, &this->mqtt_port, SettingsElements::Int},
-        {"Min Battery Voltage", "", "", true, &min_batt_voltage, SettingsElements::Double},
-        {"Max Battery Voltage", "", "", true, &max_batt_voltage, SettingsElements::Double},
-        {"Min Motor (us)", "", "", true, &motor.low_pwm_value, SettingsElements::Int},
-        {"Max Motor (us)", "", "", true, &motor.high_pwm_value, SettingsElements::Int},
-        {"Min Rudder (us)", "", "", true, &rudder.low_pwm_value, SettingsElements::Int},
-        {"Max Rudder (us)", "", "", true, &rudder.high_pwm_value, SettingsElements::Int},
-        {"Min Elevator (us)", "", "", true, &elevator.low_pwm_value, SettingsElements::Int},
-        {"Max Elevator (us)", "", "", true, &elevator.high_pwm_value, SettingsElements::Int},
-        {"Min Left Aileron (us)", "", "", true, &left_aileron.low_pwm_value, SettingsElements::Int},
-        {"Max Left Aileron (us)", "", "", true, &left_aileron.high_pwm_value, SettingsElements::Int},
-        {"Min Right Aileron (us)", "", "", true, &right_aileron.low_pwm_value, SettingsElements::Int},
-        {"Max Right Aileron (us)", "", "", true, &right_aileron.high_pwm_value, SettingsElements::Int},
-        {"Min Left Flap (us)", "", "", true, &left_flap.low_pwm_value, SettingsElements::Int},
-        {"Max Left Flap (us)", "", "", true, &left_flap.high_pwm_value, SettingsElements::Int},
-        {"Min Right Flap (us)", "", "", true, &right_flap.low_pwm_value, SettingsElements::Int},
-        {"Max Right Flap (us)", "", "", true, &right_flap.high_pwm_value, SettingsElements::Int},
-        {"Min Landing Gear 1 Flap (us)", "", "", true,&landing_gear1.low_pwm_value, SettingsElements::Int },
-        {"Max Landing Gear 1 Flap (us)", "", "", true, &landing_gear1.high_pwm_value, SettingsElements::Int },
-        {"Min Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.low_pwm_value, SettingsElements::Int },
-        {"Max Landing Gear 2 Flap (us)", "", "", true, &landing_gear2.high_pwm_value, SettingsElements::Int },
-        {"Motor Channel", "", "", true, &motor.channel, SettingsElements::Int},
-        {"Rudder Channel", "", "", true, &rudder.channel, SettingsElements::Int},
-        {"Elevator Channel", "", "", true, &elevator.channel, SettingsElements::Int},
-        {"Left Aileron Channel", "", "", true, &left_aileron.channel, SettingsElements::Int},
-        {"Right Aileron Channel", "", "", true, &right_aileron.channel, SettingsElements::Int},
-        {"Left Flap Channel", "", "", true, &left_flap.channel, SettingsElements::Int},
-        {"Right Flap Channel", "", "", true, &right_flap.channel, SettingsElements::Int},
-        {"Arm Switch Channel", "", "", true, &arm_status_switch.channel, SettingsElements::Int},
-        {"Landing Gear 1 Channel", "", "", true,& landing_gear1.channel, SettingsElements::Int },
-        {"Landing Gear 2 Channel", "", "", true, &landing_gear2.channel, SettingsElements::Int}
-        
-    };
+        QWidget* content = new QWidget();
+        content->setObjectName("ScrollContent");
+        contentLayout = new QVBoxLayout(content);
+        contentLayout->setContentsMargins(18, 12, 14, 12);
+        contentLayout->setSpacing(0);
+
+        area->setWidget(content);
+        tabLayout->addWidget(area);
+        return tab;
+        };
+
+    QVBoxLayout* generalLayout = nullptr, * audioLayout = nullptr,
+        * tcmLayout = nullptr, * controlsurfacesLayout = nullptr;
+
+    QWidget* generalTab = makeScrollTab(generalLayout);
+    QWidget* tcmTab = makeScrollTab(tcmLayout);
+    QWidget* controlsurfacesTab = makeScrollTab(controlsurfacesLayout);
+    QWidget* audioTab = makeScrollTab(audioLayout);
+
+    // Τα Channels πάνε σε 2 στήλες
+    QGridLayout* tcmGrid = new QGridLayout();
+    tcmGrid->setHorizontalSpacing(18);
+    tcmGrid->setVerticalSpacing(0);
+    tcmGrid->setColumnStretch(0, 1);
+    tcmGrid->setColumnStretch(1, 1);
+    tcmLayout->addLayout(tcmGrid);
+    int tcmCount = 0;
+
+    // Label + πεδίο μαζί, με κενό από κάτω: φαίνεται ποιο label ανήκει σε ποιο πεδίο
+    auto makeCell = [](QWidget* label, QWidget* entry) -> QWidget* {
+        QWidget* cell = new QWidget();
+        QVBoxLayout* cl = new QVBoxLayout(cell);
+        cl->setContentsMargins(0, 0, 0, 16);
+        cl->setSpacing(5);
+        cl->addWidget(label);
+        cl->addWidget(entry);
+        return cell;
+        };
 
     for (auto& field : settings_fields) {
 
         if (field.label) { delete field.label; field.label = nullptr; }
         if (field.entry) { delete field.entry; field.entry = nullptr; }
 
-        field.label = new QLabel(field.labeltext + ":", settings_window);
+        // labeltext μένει όπως είναι (το χρησιμοποιεί η λογική). Αλλάζει μόνο το κείμενο που φαίνεται.
+        field.label = new QLabel(field.labeltext.toUpper(), settings_window);
+        field.label->setObjectName("SectionLabel");
+        QFont lf("Segoe UI", 9, QFont::DemiBold);
+        lf.setLetterSpacing(QFont::AbsoluteSpacing, 1.5);
+        field.label->setFont(lf);
 
         if (field.type == SettingsElements::Bool) {
             QCheckBox* checkBox = new QCheckBox(field.labeltext.contains("Sound") ? "Enable Sound" : "Enabled", settings_window);
             checkBox->setChecked(*(static_cast<bool*>(field.targetVar)));
+            checkBox->setCursor(Qt::PointingHandCursor);
+            checkBox->setMinimumHeight(34);
             field.entry = checkBox;
         }
 
         else if (field.type == SettingsElements::String) {
             QString currentVal = *(static_cast<QString*>(field.targetVar));
             QLineEdit* lineEdit = new QLineEdit(currentVal, settings_window);
+            lineEdit->setMinimumHeight(40);
             field.entry = lineEdit;
         }
 
         else if (field.type == SettingsElements::Int) {
             QString currentValStr = QString::number(*(static_cast<int*>(field.targetVar)));
             QLineEdit* lineEdit = new QLineEdit(currentValStr, settings_window);
+            lineEdit->setMinimumHeight(40);
 
             if (field.labeltext.contains("Channel"))
                 lineEdit->setValidator(new QIntValidator(1, 16, lineEdit));
@@ -1493,36 +1570,54 @@ void GcsGUI::chooseSettings() {
             double currentVal = *(static_cast<double*>(field.targetVar));
             QString currentValStr = QString::number(currentVal, 'f', 1); // 1 δεκαδικό
             QLineEdit* lineEdit = new QLineEdit(currentValStr, settings_window);
-            lineEdit->setValidator(new QDoubleValidator(0.0, 1000.0, 2, lineEdit)); 
+            lineEdit->setMinimumHeight(40);
+
+            auto* validator = new QDoubleValidator(0.0, 1000.0, 2, lineEdit);
+            validator->setNotation(QDoubleValidator::StandardNotation);
+            validator->setLocale(QLocale::c());      // τελεία ως υποδιαστολή
+            lineEdit->setValidator(validator);
+
             field.entry = lineEdit;
         }
 
-        QVBoxLayout* target = generalLayout;
+        QWidget* cell = makeCell(field.label, field.entry);
 
-        if (field.labeltext.contains("Sound")) target = audioLayout;
-        else if (field.labeltext.contains("Channel")) target = tcmLayout;
+        if (field.labeltext.contains("Sound")) {
+            audioLayout->addWidget(cell);
+        }
+        else if (field.labeltext.contains("Channel")) {
+            tcmGrid->addWidget(cell, tcmCount / 2, tcmCount % 2);
+            ++tcmCount;
+        }
         else if (field.labeltext.contains("Motor") || field.labeltext.contains("Rudder") ||
             field.labeltext.contains("Elevator") || field.labeltext.contains("Aileron") ||
-            field.labeltext.contains("Flap")) target = controlsurfacesLayout;
-        else if (field.labeltext.contains("MQTT") || field.labeltext.contains("Battery") ) target = generalLayout;
-
-        target->addWidget(field.label);
-        target->addWidget(field.entry);
+            field.labeltext.contains("Flap")) {
+            controlsurfacesLayout->addWidget(cell);
+        }
+        else {
+            generalLayout->addWidget(cell);   // MQTT, Battery και τα υπόλοιπα
+        }
     }
 
     for (auto l : { generalLayout, audioLayout, controlsurfacesLayout, tcmLayout }) l->addStretch();
 
+    // Σύντομα ονόματα στα tabs, τα πλήρη ως tooltip
     tabWidget->addTab(generalTab, "General");
-    tabWidget->addTab(tcmTab, "Transmitter Channel Mapping");
-    tabWidget->addTab(controlsurfacesTab, "Control Surfaces PWM Bounds");
+    tabWidget->addTab(tcmTab, "Channels");
+    tabWidget->addTab(controlsurfacesTab, "Surfaces");
     tabWidget->addTab(audioTab, "Audio");
+    tabWidget->setTabToolTip(1, "Transmitter Channel Mapping");
+    tabWidget->setTabToolTip(2, "Control Surfaces PWM Bounds");
 
     QPushButton* confirmButton = new QPushButton("Confirm Settings", settings_window);
-    confirmButton->setStyleSheet(HOVERED_STYLE_SETTINGS);
+    confirmButton->setObjectName("PrimaryButton");
+    confirmButton->setFixedHeight(48);
+    confirmButton->setCursor(Qt::PointingHandCursor);
 
-    main_layout->addWidget(tabWidget);
+    main_layout->addWidget(tabWidget, 1);
     main_layout->addWidget(confirmButton);
 
+    // --- Confirm (αμετάβλητο) ---
     connect(confirmButton, &QPushButton::clicked, this, [this, settings_window]() {
         bool mqtt_changed = false;
 
@@ -1591,7 +1686,7 @@ void GcsGUI::chooseSettings() {
 
         if (mqtt_changed) {
             qDebug() << "MQTT settings changed! Restarting connection...";
-            this->start_mqtt();
+            backend_handler->start_mqtt();
         }
 
         settings_window->close();
