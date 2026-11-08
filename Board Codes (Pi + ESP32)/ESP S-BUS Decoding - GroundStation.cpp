@@ -151,7 +151,10 @@ void loop() {
         static unsigned long lastPrint = 0;
         if (millis() - lastPrint > 1000) {
           lastPrint = millis();
-          Serial.printf("🎮 SBUS CH1-4: %4d | %4d | %4d | %4d\n", pwm[0], pwm[1], pwm[2], pwm[3]);
+          Serial.printf("CH1: %d, CH2: %d, CH3: %d, CH4: %d, CH5: %d, CH6: %d, CH7: %d, CH8: %d, ", 
+                        pwm[0], pwm[1], pwm[2], pwm[3], pwm[4], pwm[5], pwm[6], pwm[7]);
+          Serial.printf("CH9: %d, CH10: %d, CH11: %d, CH12: %d, CH13: %d, CH14: %d, CH15: %d, CH16: %d\n", 
+                        pwm[8], pwm[9], pwm[10], pwm[11], pwm[12], pwm[13], pwm[14], pwm[15]);
         }
       }
     }
