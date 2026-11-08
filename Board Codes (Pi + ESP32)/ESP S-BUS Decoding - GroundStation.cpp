@@ -12,7 +12,7 @@
 // --- ΡΥΘΜΙΣΕΙΣ WIFI & MQTT ---
 const char* ssid = "Masterio";
 const char* password = "masterakhs95";
-const char* mqtt_server = "192.168.1.100";
+const char* mqtt_server = "10.22.135.123";
 const int   mqtt_port = 1883;
 
 WiFiClient espClient;
