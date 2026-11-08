@@ -9,14 +9,14 @@ constexpr const char* password = "asat";
 
 MqttClient::MqttClient(const QString& host, quint16 port, const QString& receiveTopic, const QString& sendTopic, QObject* parent)
     : QObject(parent),
-    m_host(host),
-    m_port(port),
-    m_receiveTopic(receiveTopic),
-    m_sendTopic(sendTopic)
+    host_name(host),
+    port_name(port),
+    receiveTopic(receiveTopic),
+    sendTopic(sendTopic)
 {
     m_client = new QMqttClient(this);
-    m_client->setHostname(m_host);
-    m_client->setPort(m_port);
+    m_client->setHostname(host_name);
+    m_client->setPort(port_name);
 
     connect(m_client, &QMqttClient::connected, this, &MqttClient::onConnected);
     connect(m_client, &QMqttClient::disconnected, this, &MqttClient::onDisconnected);
@@ -28,16 +28,9 @@ void MqttClient::connectToBroker()
     m_client->setUsername(username);
     m_client->setPassword(password);
 
-    // 2. Ενεργοποίησε το SSL/TLS 
-    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-
-    // Αν έχεις θέμα με τα certificates, δοκίμασε να βάλεις (προαιρετικά):
-    // sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-
-
     if (m_client->state() != QMqttClient::Connected) {
-        m_client->connectToHostEncrypted(sslConfig);
-        qDebug() << "Attempting to connect to MQTT broker...";
+        m_client->connectToHost();
+        qDebug() << "Attempting to connect to MQTT broker on port" << port_name << "...";
     }
 }
 
@@ -73,8 +66,8 @@ void MqttClient::onConnected()
 {
     qDebug() << "Connected to MQTT Broker!";
     
-    m_client->subscribe(QMqttTopicFilter(m_receiveTopic), 1);
-    m_client->subscribe(QMqttTopicFilter(m_sendTopic), 1);
+    m_client->subscribe(QMqttTopicFilter(receiveTopic), 1);
+    m_client->subscribe(QMqttTopicFilter(sendTopic), 1);
 }
 
 void MqttClient::onDisconnected()
@@ -102,7 +95,7 @@ void MqttClient::unsubscribe(const QMqttTopicFilter& filter) {
 void MqttClient::onMessageReceived(const QByteArray& message, const QMqttTopicName& topic)
 {
     QString data = QString::fromUtf8(message);
-    if (topic.name() == m_receiveTopic) {
+    if (topic.name() == receiveTopic) {
         emit on_mqtt_message(data);
     }
 

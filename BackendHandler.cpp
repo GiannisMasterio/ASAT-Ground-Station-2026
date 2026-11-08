@@ -12,12 +12,18 @@
 #include <QCoreApplication>
 #include <QUrl>
 #include <algorithm>
-#include "mqttclient.h"
-#include "containers.h"
-#include "graphcontainer.h"
+#include "MqttClient.h"
+#include "Containers.h"
+#include "GraphContainer.h"
 #include <QFrame>
 #include <QtSerialPort/QSerialPortInfo>
 #include "VarState.h"
+
+double mapValue(double x, double in_min, double in_max, double out_min, double out_max) {
+    if (x < in_min) x = in_min;
+    if (x > in_max) x = in_max;
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 using namespace std;
 
@@ -39,105 +45,70 @@ BackendHandler::BackendHandler(QObject* parent, QObject* defaultValue) :
     audio_handler = new AudioHandler(this);
 }
 
-
-
-double BackendHandler::RPMFilter(double new_rpm) {
-    rpm_buffer.push_back(new_rpm);
-
-    if (rpm_buffer.size() > rpm_filter_window) {
-        rpm_buffer.erase(rpm_buffer.begin());
-    }
-
-    QVector<double> sorted_buffer = rpm_buffer;
-    std::sort(sorted_buffer.begin(), sorted_buffer.end());
-
-    return sorted_buffer[sorted_buffer.size() / 2];
-}
-
 // Telemetry Functions
 void BackendHandler::receiveTelemetry(const QString& data, QString source) {
-
     if (source != selected_data_source) return;
 
-    if (selected_data_source == "MQTT") {
-        QString cleanData = data.trimmed().replace(" ", "");
-        QMap<QString, double> value_keeper;
-        QStringList parts = cleanData.split(",");
+    QString cleanData = data.trimmed().replace(" ", "");
+    QMap<QString, double> value_keeper;
+    QStringList parts = cleanData.split(",");
 
-        for (const QString& part : parts) {
-            QStringList pair = part.split(":");
-            if (pair.size() == 2) {
-                bool ok;
-                double val = pair[1].toDouble(&ok);
-                if (ok) {
-                    value_keeper[pair[0]] = val;
-                }
+    for (const QString& part : parts) {
+        QStringList pair = part.split(":");
+        if (pair.size() == 2) {
+            bool ok;
+            double val = pair[1].toDouble(&ok);
+            if (ok) {
+                value_keeper[pair[0]] = val;
             }
         }
+    }
+
+    if (!value_keeper.isEmpty()) {
         updateTelemetry(value_keeper);
     }
-    else {
-        QString cleanData = data.trimmed();
-        cleanData.replace("V = ", "V:");
-        cleanData.replace("I = ", "I:");
-        cleanData.replace(" V,", ",");
-        cleanData.replace(" A,", ",");
-        cleanData.replace(" ", "");
-
-        QMap<QString, double> value_keeper;
-        QStringList parts = cleanData.split(",");
-
-        for (const QString& part : parts) {
-            QStringList pair = part.split(":");
-            if (pair.size() >= 2) {
-                bool ok;
-                double val = QLocale::c().toDouble(pair[1], &ok);
-                if (ok) {
-                    value_keeper[pair[0]] = val;
-                }
-            }
-        }
-
-        if (!value_keeper.isEmpty()) {
-            updateTelemetry(value_keeper);
-        }
-    }
-
-    bool previous_write_status = write_logs;
-
-    if (tel.voltage == battery_removed_voltage_value) tel.voltage = 0;
-
-    if (tel.voltage == 0) {
-        write_logs = false;
-        if (is_armed) emit armedStateChanged(false); // disarm
-    }
-    else {
-        if (!is_armed) emit armedStateChanged(true); // an den einai armed kanto gia tash!=0
-    }
-
-    if (write_logs != previous_write_status) {
-        emit loggingStateChanged(write_logs);
-    }
-
-    logToFile(true);
 }
 
 void BackendHandler::updateTelemetry(QMap<QString, double> value_keeper) {
+    auto& tel = this->tel;
 
-    tel.rpm = value_keeper.value("RPM", tel.rpm);
-    tel.current = value_keeper.value("Current", tel.current);
-    tel.voltage = value_keeper.value("Voltage", tel.voltage);
-    tel.throttle = value_keeper.value("Throttle", tel.throttle);
-    tel.power = tel.voltage * tel.current;
+    tel.main_batt_voltage = value_keeper.value("MV", tel.main_batt_voltage);
+    tel.main_batt_current = value_keeper.value("MC", tel.main_batt_current);
+    tel.servo_batt_voltage = value_keeper.value("SV", tel.servo_batt_voltage);
+    tel.servo_batt_current = value_keeper.value("SC", tel.servo_batt_current);
+    tel.ground_speed = value_keeper.value("GS", tel.ground_speed);
+    tel.altitude = value_keeper.value("ALT", tel.altitude);
+    tel.latitude = value_keeper.value("LAT", tel.latitude);
+    tel.longitude = value_keeper.value("LON", tel.longitude);
+    tel.homedist = value_keeper.value("HD", tel.homedist);
+    tel.sat_count = value_keeper.value("SC", tel.sat_count);
+    tel.pi_temp = value_keeper.value("PT", tel.pi_temp);
 
-    if (use_rpm_filter) {
-        tel.rpm = RPMFilter(tel.rpm);
+    tel.current_power = tel.main_batt_voltage * tel.main_batt_current; // Προσοχή: power, όχι current_power σύμφωνα με το VarState.h
+
+    // Ειδοποιούμε το GUI (GcsGUI) ότι τα δεδομένα στο tel ενημερώθηκαν!
+    emit telemetryParsed(value_keeper);
+}
+
+// LOGGING FUNCTIONS
+void BackendHandler::chooseLogLocation() {
+    QString initialDir = QFileInfo(log_file_path).path();
+    QString newFilePath = QFileDialog::getSaveFileName(
+        nullptr, // ΔΙΟΡΘΩΣΗ: nullptr αντί για this (επειδή το BackendHandler δεν είναι QWidget)
+        "Select Log File Location",
+        initialDir,
+        "CSV Log (*.csv);;Text Log (*.txt);;All files (*.*)"
+    );
+
+    if (!newFilePath.isEmpty()) {
+        if (!newFilePath.endsWith(".csv", Qt::CaseInsensitive) && !newFilePath.endsWith(".txt", Qt::CaseInsensitive)) {
+            newFilePath += ".csv";
+        }
+
+        log_file_path = newFilePath;
+        initLogFile();
+        qDebug() << "New log file location set to:" << log_file_path;
     }
-    else {
-        RPMFilter(tel.rpm);
-    }
-
-    emit telemetryUpdated();
 }
 
 void BackendHandler::initLogFile() {
@@ -164,7 +135,6 @@ void BackendHandler::initLogFile() {
 void BackendHandler::logToFile(bool status) {
     if (!status || !write_logs) return;
 
-    int label_width = 26;
     QFile file(log_file_path);
     bool write_header = (!file.exists() || file.size() == 0);
 
@@ -173,138 +143,51 @@ void BackendHandler::logToFile(bool status) {
         return;
     }
 
-    QString timestamp = QDateTime::currentDateTime().toString("HH:mm:ss");
-    double throttle_pct = getThrottlePercentage(tel.throttle);
+    QString timestamp = QDateTime::currentDateTime().toString("HH:mm:ss.zzz");
 
-    // ΔΥΝΑΜΙΚΗ ΛΙΣΤΑ LOGGING: Προσθέτεις/αφαιρείς ό,τι θες εδώ σε 1 γραμμή!
+    // ΔΥΝΑΜΙΚΗ ΛΙΣΤΑ LOGGING (Τηλεμετρία + Όλα τα PWM)
     QVector<QPair<QString, QString>> log_columns = {
-        { "Timestamp",                 timestamp },
-        { "Thrust (N)",                QString::number(tel.thrust, 'f', 2) },
-        { "Voltage (V)",               QString::number(tel.voltage, 'f', 2) },
-        { "Current (A)",               QString::number(tel.current, 'f', 2) },
-        { "RPM",                       QString::number(tel.rpm, 'f', 0) },
-        { "Throttle (%)",              QString::number(throttle_pct, 'f', 2) },
-        { "Power (W)",                 QString::number(tel.power, 'f', 2) }
+        { "Timestamp", timestamp },
+        { "MainBatt_V", QString::number(tel.main_batt_voltage, 'f', 2) },
+        { "MainBatt_A", QString::number(tel.main_batt_current, 'f', 2) },
+        { "Power_W", QString::number(tel.current_power, 'f', 2) },
+        { "ServoBatt_V", QString::number(tel.servo_batt_voltage, 'f', 2) },
+        { "ServoBatt_A", QString::number(tel.servo_batt_current, 'f', 2) },
+        { "Altitude_m", QString::number(tel.altitude, 'f', 2) },
+        { "GroundSpeed_kmh", QString::number(tel.ground_speed, 'f', 2) },
+        { "HomeDist_m", QString::number(tel.homedist, 'f', 2) },
+        { "Latitude", QString::number(tel.latitude, 'f', 6) },
+        { "Longitude", QString::number(tel.longitude, 'f', 6) },
+        { "PiTemp_C", QString::number(tel.pi_temp, 'f', 1) },
+        { "Sat_Count", QString::number(tel.sat_count) },
+        { "Throttle_Pct", QString::number(getThrottlePercentage(surfaces.motor.current_value), 'f', 2) },
+        { "PWM_Motor", QString::number(surfaces.motor.current_value) },
+        { "PWM_Rudder", QString::number(surfaces.rudder.current_value) },
+        { "PWM_Elevator", QString::number(surfaces.elevator.current_value) },
+        { "PWM_Aileron_L", QString::number(surfaces.left_aileron.current_value) },
+        { "PWM_Aileron_R", QString::number(surfaces.right_aileron.current_value) },
+        { "PWM_Flap_L", QString::number(surfaces.left_flap.current_value) },
+        { "PWM_Flap_R", QString::number(surfaces.right_flap.current_value) },
+        { "PWM_Gear_1", QString::number(surfaces.landing_gear1.current_value) },
+        { "PWM_Gear_2", QString::number(surfaces.landing_gear2.current_value) },
+        { "PWM_ArmSwitch", QString::number(surfaces.arm_status_switch.current_value) }
     };
 
     QTextStream out(&file);
 
-    // Αν το αρχείο είναι άδειο, γράφει αυτόματα τις επικεφαλίδες από τη λίστα!
+    // Γράφει αυτόματα τις επικεφαλίδες αν το αρχείο είναι άδειο (με διαχωριστικό το ερωτηματικό ;)
     if (write_header) {
-        for (const auto& col : log_columns) {
-            out << QString("%1 ").arg(col.first, label_width);
-        }
-        out << "\n";
+        QStringList headers;
+        for (const auto& col : log_columns) headers << col.first;
+        out << headers.join(";") << "\n";
     }
 
-    // Γράφει τις τιμές
-    for (const auto& col : log_columns) {
-        out << QString("%1 ").arg(col.second, label_width);
-    }
-    out << "\n";
+    // Γράφει τις τιμές (με διαχωριστικό το ερωτηματικό ;)
+    QStringList values;
+    for (const auto& col : log_columns) values << col.second;
+    out << values.join(";") << "\n";
 
     file.close();
-}
-
-void BackendHandler::handleSerial(bool status) {
-    if (status) {
-        if (serial_port->isOpen()) {
-            serial_port->close();
-            qDebug() << "Closed previous serial port.";
-        }
-
-        serial_port->setPortName(serial_com_port_tag);
-        serial_port->setBaudRate(serial_baudrate);
-
-        if (serial_port->open(QIODevice::ReadWrite)) {
-            connect(serial_port, &QSerialPort::readyRead, this, &BackendHandler::readSerialData, Qt::UniqueConnection);
-            qDebug() << "Opened serial port" << serial_com_port_tag << "at" << serial_baudrate;
-        }
-        else {
-            qWarning() << "Cannot open port" << serial_com_port_tag << ":" << serial_port->errorString();
-        }
-    }
-    else {
-        if (serial_port->isOpen()) {
-            serial_port->close();
-            qDebug() << "Serial port closed.";
-        }
-    }
-}
-
-QStringList BackendHandler::getAvailablePorts() {
-    QStringList ports;
-    for (const QSerialPortInfo& info : QSerialPortInfo::availablePorts()) {
-        ports << info.portName();
-    }
-    return ports;
-}
-
-bool BackendHandler::connectSerial(const QString& portName, int baudrate) {
-    serial_com_port_tag = portName;
-    serial_baudrate = baudrate;
-
-    playAudio(audio_click_sfx_volume, "MainClick");
-    confirmPort(); // Η υπάρχουσα συνάρτησή σου για σύνδεση
-
-    return isSerialConnected();
-}
-
-void BackendHandler::confirmPort() {
-    qDebug() << "Selected COM port:" << serial_com_port_tag;
-    qDebug() << "Selected baudrate:" << serial_baudrate;
-    handleSerial(running);
-}
-
-bool BackendHandler::isSerialConnected() const {
-    return (serial_port && serial_port->isOpen());
-}
-
-void BackendHandler::readSerialData() {
-    while (serial_port->canReadLine()) {
-        QByteArray data = serial_port->readLine();
-        if (!data.isEmpty()) {
-            QString serialData = QString::fromUtf8(data).trimmed();
-            qDebug() << "Full Line Received:" << serialData;
-            receiveTelemetry(serialData, "SERIAL");
-        }
-    }
-}
-
-void BackendHandler::serial_sendCommand(QString command) {
-    if (!serial_port || !serial_port->isOpen()) {
-        qDebug() << "Serial not open!";
-        return;
-    }
-
-    if (!command.endsWith("\n"))
-        command += "\n";
-
-    QByteArray data = command.toUtf8();
-    qint64 bytes = serial_port->write(data);
-    serial_port->flush();
-
-    qDebug() << "TX:" << data << "bytes:" << bytes;
-}
-
-void BackendHandler::chooseLogLocation() {
-    QString initialDir = QFileInfo(log_file_path).path();
-    QString newFilePath = QFileDialog::getSaveFileName(
-        nullptr, // ΔΙΟΡΘΩΣΗ: nullptr αντί για this (επειδή το BackendHandler δεν είναι QWidget)
-        "Select Log File Location",
-        initialDir,
-        "CSV Log (*.csv);;Text Log (*.txt);;All files (*.*)"
-    );
-
-    if (!newFilePath.isEmpty()) {
-        if (!newFilePath.endsWith(".csv", Qt::CaseInsensitive) && !newFilePath.endsWith(".txt", Qt::CaseInsensitive)) {
-            newFilePath += ".csv";
-        }
-
-        log_file_path = newFilePath;
-        initLogFile();
-        qDebug() << "New log file location set to:" << log_file_path;
-    }
 }
 
 void BackendHandler::openLogFile() {
@@ -325,6 +208,7 @@ void BackendHandler::openLogFile() {
 }
 
 // MQTT Functions
+
 void BackendHandler::start_mqtt() {
     if (mqttcfg.mqtt_client) {
         mqttcfg.mqtt_client->disconnectFromBroker();
@@ -406,7 +290,9 @@ void BackendHandler::updateMqttSendTopic(const QString& newTopic) {
     mqttcfg.mqtt_send_topic = newTopic;
     qDebug() << "ModeHandler MQTT Topic updated to:" << newTopic;
 }
+
 // SOUND HANDLER FUNCTIONS
+
 void BackendHandler::playAudio(int volume, QString audio_tag) {
     if (audio_handler) audio_handler->playSound(volume, audio_tag);
 }
@@ -420,7 +306,8 @@ void BackendHandler::setSoundStatus(bool sound_status) {
         audio_handler->setSoundStatus(sound_status);
     }
 }
-// ------------------------------------------------------------------------
+
+// OTHER
 double BackendHandler::getThrottlePercentage(int current_throttle) {
 
     if (cal.max_throttle <= cal.min_throttle)
@@ -429,3 +316,107 @@ double BackendHandler::getThrottlePercentage(int current_throttle) {
     return 100.0 * (current_throttle - cal.min_throttle) / (cal.max_throttle - cal.min_throttle);
 }
 
+double BackendHandler::RPMFilter(double new_rpm) {
+    rpm_buffer.push_back(new_rpm);
+
+    if (rpm_buffer.size() > rpm_filter_window) {
+        rpm_buffer.erase(rpm_buffer.begin());
+    }
+
+    QVector<double> sorted_buffer = rpm_buffer;
+    std::sort(sorted_buffer.begin(), sorted_buffer.end());
+
+    return sorted_buffer[sorted_buffer.size() / 2];
+}
+
+// SERIAL CONTROL
+
+void BackendHandler::handleSerial(bool status) {
+
+    if (status) {
+
+        if (serial_port->isOpen()) {
+            serial_port->close();
+            qDebug() << "Closed previous serial port.";
+        }
+
+        serial_port->setPortName(com_port);
+        serial_port->setBaudRate(baudrate);
+
+        if (serial_port->open(QIODevice::ReadWrite)) {
+            connect(serial_port, &QSerialPort::readyRead, this, &BackendHandler::readSerialData);
+            qDebug() << "Opened serial port" << com_port << "at" << baudrate;
+        }
+
+        else {
+            qWarning() << "Cannot open port" << com_port << ":" << serial_port->errorString();
+        }
+    }
+
+    else {
+
+        if (serial_port->isOpen()) {
+            serial_port->close();
+            qDebug() << "Serial port closed.";
+        }
+
+    }
+}
+
+void BackendHandler::readSerialData() {
+    while (serial_port->canReadLine()) {
+        QByteArray data = serial_port->readLine();
+        if (!data.isEmpty()) {
+            QString serialData = QString::fromUtf8(data).trimmed();
+            if (!process_begin) {
+                process_begin = true;
+            }
+            // ΟΧΙ terminalLog εδώ
+            receiveTelemetry(serialData, "SERIAL");
+        }
+    }
+}
+
+void BackendHandler::confirmPort() {
+    qDebug() << "Selected COM port:" << com_port;
+    qDebug() << "Selected baudrate:" << baudrate;
+    handleSerial(running);
+}
+
+QStringList BackendHandler::getAvailablePorts() {
+    QStringList ports;
+    for (const QSerialPortInfo& info : QSerialPortInfo::availablePorts()) {
+        ports << info.portName();
+    }
+    return ports;
+}
+
+bool BackendHandler::connectSerial(const QString& portName, int baudrate) {
+    serial_com_port_tag = portName;
+    serial_baudrate = baudrate;
+
+    playAudio(audio_click_sfx_volume, "MainClick");
+    confirmPort(); // Η υπάρχουσα συνάρτησή σου για σύνδεση
+
+    return isSerialConnected();
+}
+
+bool BackendHandler::isSerialConnected() const {
+    return (serial_port && serial_port->isOpen());
+}
+
+void BackendHandler::serial_sendCommand(QString command) {
+    if (!serial_port || !serial_port->isOpen()) {
+        qDebug() << "Serial not open!";
+        return;
+    }
+
+    if (!command.endsWith("\n"))
+        command += "\n";
+
+    QByteArray data = command.toUtf8();
+    qint64 bytes = serial_port->write(data);
+    serial_port->flush();
+
+    qDebug() << "TX:" << data << "bytes:" << bytes;
+}

@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QFrame>
-#include "hudwidgets.h"
+#include "HudWidgets.h"
 class QLabel;
 class QProgressBar;
 class QCheckBox;

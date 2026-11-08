@@ -6,13 +6,20 @@
 #include "mqttclient.h"
 
 struct TelemetryData {
-    double thrust = 0.0;
-    double rpm = 0.0;
-    double current = 0.0;
-    double voltage = 0.0;
-    int throttle = MIN_THROTTLE;
-    double power = 0.0;
-    double torque = 0.0;
+    double main_batt_voltage = 0.0;
+    double main_batt_current = 0.0;
+    double servo_batt_voltage = 0.0;
+    double servo_batt_current = 0.0;
+    double ground_speed = 0.0;
+    double altitude = 0.0;
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double homedist = 0.0;
+    int sat_count = 0;
+    double pi_temp = 0.0;
+    int current_throttle = MIN_THROTTLE;
+    double current_power = 0.0;
+    
 };
 
 struct ControlSurfaces {
@@ -25,23 +32,21 @@ struct ControlSurfaces {
     double current_angle;
 };
 
+struct PlaneControlSurfaces {
+    ControlSurfaces left_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 };
+    ControlSurfaces right_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 };
+    ControlSurfaces elevator{ 2, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
+    ControlSurfaces motor{ 3, 988, 2012, 0 , -45.0, 45.0, 0.0 };
+    ControlSurfaces rudder{ 4, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
+    ControlSurfaces left_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
+    ControlSurfaces right_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
+    ControlSurfaces landing_gear1{ 7, 988, 2012, 0 , 0.0, 90.0 , 0.0 };
+    ControlSurfaces landing_gear2{ 8, 988, 2012, 0 , 0.0, 90.0 , 0.0 };
+    ControlSurfaces arm_status_switch{ 9, 988, 2012,0 };
+};
+
+
 struct CalibrationConfig {
-    const float current_lsb_user_esp = 0.00003688f;
-    float current_lsb_user_selected = 0.00003688f;
-    bool manual_current_calibration = false;
-
-    const float esp_actual_tare_offset = 38468.909f;
-    const float esp_thrust_calibration_factor = 0.4485f;
-    float direction_sign = -1.0f;
-    float thrust_calibration_factor = 0.4485f;
-    float tare_newton_offset = 38468.909f;
-    bool manual_thrust_calibration = false;
-    bool auto_tare_thrust_at_begin = false;
-
-    double thrust_offset = 0.0;
-    double current_offset = 0.0;
-
-    float gravity = 9.81f;
 
     int min_throttle = MIN_THROTTLE;
     int max_throttle = MAX_THROTTLE;
@@ -55,5 +60,7 @@ struct MqttConfig {
     QString mqtt_broker = DEFAULT_MQTT_BROKER;
     QByteArray last_mqtt_data;
 };
+
+double mapValue(double x, double in_min, double in_max, double out_min, double out_max);
 
 #endif

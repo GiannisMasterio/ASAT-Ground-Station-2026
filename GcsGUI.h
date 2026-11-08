@@ -10,8 +10,7 @@
 #include "containers.h"
 #include "graphcontainer.h"
 #include <qframe.h>
-#include "qcustomplot.h"
-#include "audiohandler.h"
+#include "QcustomPlot.h"
 #include "BatteryWidget.h"
 #include "BackendHandler.h"
 #include <Qt3DExtras/Qt3DWindow>
@@ -142,25 +141,10 @@ public:
     void setElevatorColor(const QColor& color);
     void setElevatorValue(double value);
 
-    double getLatitude() const { return latitude; }
-    double getLongitude() const { return longitude; }
-
-    void setLatitude(double lat) {
-        if (qFuzzyCompare(latitude, lat)) return;
-        latitude = lat;
-        emit latitudeChanged(); 
-        emit locationChanged(); 
-    }
-
-    void setLongitude(double lon) {
-        if (qFuzzyCompare(longitude, lon)) return;
-        longitude = lon;
-        emit longitudeChanged(); 
-        emit locationChanged(); 
-    }
-
-    // STATIC METHOD
-    static QString getHoverStyle(const QString& baseColor);
+    double getLatitude() const;
+    double getLongitude() const;
+    void setLatitude(double lat);
+    void setLongitude(double lon);
 
     // USEFUL POINTERS
     AudioHandler* audio_handler = nullptr;
@@ -202,25 +186,18 @@ signals:
     void elevatorValueChanged();
 
 private slots:
-    
+
+    void updateUIFromTelemetry(QMap<QString, double> values);
     void setThrottle(qreal val);
 
     void close_program();
     void graphicUpdates();
-    void chooseLogLocation();
-    void openLogFile();
-    void serial_control();
-    void confirmPort();
+
+    void serialControlWindow();
     void changeScene();
 
     void chooseSettings();
     void saveSettings();
-
-    void handleSerial(bool status);
-    void readSerialData();
-
-    void processData(const QString& data, QString source);
-    void logToFile(bool status);
 
 private:
 	BackendHandler* backend_handler = nullptr;
@@ -238,7 +215,6 @@ private:
     QTimer* mqtt_data_timer = nullptr;
     QTimer* graphic_timer = nullptr;
 
-    QPlainTextEdit* terminalLog = nullptr;
     QQmlEngine* sharedQmlEngine = nullptr;
 
     QStackedWidget* sceneStack = nullptr;
@@ -277,6 +253,8 @@ private:
     QFile* log_file = nullptr;
     QFile* save_file = nullptr;
 
+    double graphtimeCounter = 0.0;
+
     // --- Strings & Collections ---
     const QStringList LOG_HEADERS = {
         "Timestamp", "Armed_State", "MainVoltage (V)", "MainCurrent (A)", "Power (W)", "ServoVoltage (V)", "ServoCurrent (A)", "Altitude (m)", "GroundSpeed (km/h)", "DistToHome (m)"
@@ -287,38 +265,22 @@ private:
     QString mqtt = "MQTT";
     QString serial = "SERIAL";
     QString selected_source = mqtt;
-    QString com_port;
+    
     QString scene_icon_path = PLANEICONPATH;
     QString status_icon_path = DISARMED_ICONPATH;
     QString logging_icon_path = LOGGING_OFF_ICONPATH;
     QString save_icon_path = SAVEICON_LOW_OPACITY_PATH;
     QString earth_icon_path = EARTH_ICONPATH;
     QString servo_icon_path = SERVOICONPATH;
-    QString mqtt_receive_topic = DEFAULT_MQTT_RECEIVE_TOPIC;
-    QString mqtt_send_topic = DEFAULT_MQTT_SEND_TOPIC;
-    QString mqtt_broker = DEFAULT_MQTT_BROKER;
-    QString log_file_path = "ASAT GCS Pro Records.csv";
+  
     QString save_file_path = "ASAT GCS Pro Save.txt";
     QString current_scene = "MAIN";
 
-    QStringList baudrates = { "300", "1200", "2400", "4800", "9600", "14400", "19200", "38400", "57600", "115200" };
     QByteArray last_mqtt_data;
 
     QVector<SettingsElements> settings_fields;
     QVector<double> altitudeHistory; // buffer gia altitude graph
     QVector<double> timeHistory;
-
-    // --- Control Surfaces Objects (OpenTX / EdgeTX Defaults) ---
-    ControlSurfaces left_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 };
-    ControlSurfaces right_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 }; // μπορεί να είναι το CH6 με mix, αλλά προς το παρόν ας το αφήσουμε 1
-    ControlSurfaces elevator{ 2, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
-    ControlSurfaces motor{ 3, 988, 2012, 0 , -45.0, 45.0, 0.0 }; // Throttle
-    ControlSurfaces rudder{ 4, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
-    ControlSurfaces left_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
-    ControlSurfaces right_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
-    ControlSurfaces landing_gear1{ 7, 988, 2012, 0 , 0.0, 90.0 , 0.0 };
-    ControlSurfaces landing_gear2{ 8, 988, 2012, 0 , 0.0, 90.0 , 0.0 };
-    ControlSurfaces arm_status_switch{ 9, 988, 2012,0 };
 
     // --- Doubles, qreal & 64-bit Integers (8 bytes) ---
     QElapsedTimer lastSceneChange;
@@ -329,28 +291,15 @@ private:
     qreal m_leftAileronValue = 0.0;
     qreal m_rightAileronValue = 0.0;
 
-    double main_batt_voltage = 0.0;
-    double main_batt_current = 0.0;
-    double servo_batt_voltage = 0.0;
-    double servo_batt_current = 0.0;
-    double altitude = 0.0;
-    double latitude = 40.6401;  // ΠΡΟΕΠΙΛΕΓΩ ΘΕΣΣΑΛΟΝΙΚΗ
-    double longitude = 22.9444;
-    double homedist = 0.0;
-    double ground_speed = 0.0;
-    double pi_temp = 0.0;
-    double current_throttle = 0.0;
-    double current_power = 0.0;
-    double graphtimeCounter = 0.0;
     double m_rudderValue = 0.0;
     double m_elevatorValue = 0.0;
     
     int m_cameraIndex = 0; // 0=Perspective, 1=Top, 2=Side, 3=Front
     int logIntervalMs = 500;
-    int baudrate = 9600;
-    int sat_count = 0;
+
+
     int auto_mode_timer_interval_ms = AUTO_MODE_TIMER_INTERVAL_MS;
-    int mqtt_port = DEFAULT_MQTT_PORT;
+
     const int MAX_GRAPH_POINTS = 2000;
     const int max_motor_throttle = 200; // edw antistoixei se timh toy qml
 
@@ -375,13 +324,15 @@ private:
     double getServoAngle(ControlSurfaces* control_surface);
     QFrame* createBottomToolbar();
     QWidget* createCameraWidget(int cameraIndex, QWidget* parent);
+
     void createMainScene();
     void createControlSurfacesScene();
     void createEarthProjectionScene();
+
     void setupSettingsFields();
     void loadSettings();
     void set_colors();
-    void initLogFile();
+
     void setBatteryPercentage();
     void updateSurfaces();
     void updateBottomToolbar();

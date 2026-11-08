@@ -3,7 +3,7 @@
 
 #include <QFrame>
 #include <QString>
-#include "qcustomplot.h"
+#include "QCustomPlot.h"
 
 class QVBoxLayout;
 class QLabel;

@@ -132,21 +132,21 @@ Qt6Mqtt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="hudwidgets.h" />
+    <QtMoc Include="HudWidgets.h" />
     <ClInclude Include="VarState.h" />
-    <QtMoc Include="audiohandler.h">
+    <QtMoc Include="AudioHandler.h">
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">"$(QtMsBuild)\qt_vars.target" "$(QtMsBuild)\qt_moc.target"</Command>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </QtMoc>
     <QtMoc Include="BatteryWidget.h" />
-    <QtMoc Include="Backendhandler.h" />
-    <ClInclude Include="constants.h" />
-    <QtMoc Include="qcustomplot.h" />
-    <QtMoc Include="graphcontainer.h" />
-    <QtMoc Include="mqttclient.h" />
-    <ClInclude Include="modernui.h" />
+    <QtMoc Include="BackendHandler.h" />
+    <ClInclude Include="Constants.h" />
+    <QtMoc Include="QCustomPlot.h" />
+    <QtMoc Include="GraphContainer.h" />
+    <QtMoc Include="MqttClient.h" />
+    <ClInclude Include="ModernUi.h" />
     <ClInclude Include="resource.h" />
-    <QtMoc Include="containers.h" />
+    <QtMoc Include="Containers.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="QtWidgetsApplication1.rc" />

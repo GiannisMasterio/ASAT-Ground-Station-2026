@@ -51,39 +51,39 @@
     <QtMoc Include="GcsGUI.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="containers.h">
+    <QtMoc Include="Containers.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="qcustomplot.h">
+    <QtMoc Include="QCustomPlot.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="graphcontainer.h">
+    <QtMoc Include="GraphContainer.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="audiohandler.h">
+    <QtMoc Include="AudioHandler.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="mqttclient.h">
+    <QtMoc Include="MqttClient.h">
       <Filter>Header Files</Filter>
     </QtMoc>
     <QtMoc Include="BatteryWidget.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="Backendhandler.h">
+    <QtMoc Include="BackendHandler.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <QtMoc Include="hudwidgets.h">
+    <QtMoc Include="HudWidgets.h">
       <Filter>Header Files</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="constants.h">
+    <ClInclude Include="Constants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="modernui.h">
+    <ClInclude Include="ModernUi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="VarState.h">

@@ -30,10 +30,10 @@ constexpr const char* LOGGING_ON_ICONPATH = "./assets/LogOn.png";
 constexpr const char* LOGGING_OFF_ICONPATH = "./assets/LogOff.png";
 constexpr const char* EARTH_ICONPATH = "./assets/EarthIcon.png";
 
-constexpr const char* DEFAULT_MQTT_BROKER = "s7d69c41.ala.eu-central-1.emqxsl.com";
-constexpr const char* DEFAULT_MQTT_SEND_TOPIC = "from-host";
+constexpr const char* DEFAULT_MQTT_BROKER = "127.0.0.1";
+constexpr const char* DEFAULT_MQTT_SEND_TOPIC = "thrust-toesp";
 constexpr const char* DEFAULT_MQTT_RECEIVE_TOPIC = "daidalus/telemetry/state";
-constexpr int DEFAULT_MQTT_PORT = 8883; 
+constexpr int DEFAULT_MQTT_PORT = 1883;
 
 constexpr int MQTT_DELAY = 10; // ms
 constexpr int GRAPHIC_UPDATES_REFRESH_RATE = 80; 

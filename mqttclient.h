@@ -33,10 +33,10 @@ public slots:
 
 private:
     QMqttClient* m_client;
-    QString m_host;
-    quint16 m_port;
-    QString m_receiveTopic;
-    QString m_sendTopic;
+    QString host_name;
+    quint16 port_name;
+    QString receiveTopic;
+    QString sendTopic;
 };
 
 #endif // MQTTCLIENT_H

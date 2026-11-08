@@ -4,9 +4,9 @@
 
 #include <random>
 #include "constants.h"
-#include "audiohandler.h"
+#include "AudioHandler.h"
 #include <QSerialPort>
-#include "varstate.h"
+#include "VarState.h"
 
 class QWidget;
 class QPushButton;
@@ -28,11 +28,10 @@ public:
     QPushButton* slider_opener_button = nullptr;
     QMap<QString, QPair<unsigned int, unsigned int>> mode_value_limits;
 
-    void updateTelemetry(QMap<QString, double> value_keeper);
-
     TelemetryData tel;
     MqttConfig mqttcfg;
 	CalibrationConfig cal;
+    PlaneControlSurfaces surfaces;
 
     AudioHandler* audio_handler = nullptr;
 
@@ -48,8 +47,6 @@ public:
     QStringList getAvailablePorts();
     bool connectSerial(const QString& portName, int baudrate);
     bool isSerialConnected() const;
-
-    void receiveTelemetry(const QString& data, QString source);
 
     void initLogFile();
     void logToFile(bool status);
@@ -100,6 +97,8 @@ public:
     double sim_actual_airspeed = 0.0;
     std::mt19937 rng{ std::random_device{}() };
 
+    QString com_port;
+
 protected:
 
     QDateTime stage3_start_time;
@@ -137,12 +136,14 @@ private:
     double battery_removed_voltage_value = 204.8;
 
     int transition_stab_wait_time_ms = 3000;
+    int baudrate = 115200;
 
     QTimer* mqtt_data_timer = nullptr;
 
     double RPMFilter(double new_rpm);
 
 signals:
+    void telemetryParsed(QMap<QString, double> parsedValues);
     void publishMqtt(const QString& topic, const QString& payload);
     void modeChanged(const QString& newMode);
 
@@ -155,7 +156,8 @@ signals:
     void loggingStateChanged(bool logging);
 
 public slots:
-
+    void receiveTelemetry(const QString& data, QString source);
+    void updateTelemetry(QMap<QString, double> value_keeper);
     void updateMqttSendTopic(const QString& newTopic);
 
     void onMqttConnected();
