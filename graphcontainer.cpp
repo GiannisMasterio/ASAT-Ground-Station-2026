@@ -1,5 +1,5 @@
-#include "graphcontainer.h"
-#include "constants.h"
+#include "GraphContainer.h"
+#include "Constants.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QFont>

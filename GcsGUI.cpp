@@ -1,23 +1,15 @@
 ﻿#include "GcsGUI.h" 
-#include "Backendhandler.h"
-#include "containers.h"
-#include "constants.h"
+#include "BackendHandler.h"
+#include "Containers.h"
+#include "Constants.h"
 #include <QtSerialPort/QSerialPortInfo>
 #include <QQuickView>
 #include <QWidget>
 #include <QQmlContext>
-#include "modernui.h"
+#include "ModernUi.h"
 
-double mapValue(double x, double in_min, double in_max, double out_min, double out_max) {
-    if (x < in_min) x = in_min;
-    if (x > in_max) x = in_max;
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
+QString getPwmHexColor(const ControlSurfaces& surface);
 
-QString HOVERED_STYLE_SETTINGS = QString(
-    "QPushButton { background-color: %1; color: white; font - weight: bold; }"
-    "QPushButton:hover { background-color: blue; }"
-).arg(THEME_COLOR);
 
 GcsGUI::GcsGUI(QWidget* parent) : QMainWindow(parent)
 {    
@@ -550,7 +542,7 @@ void GcsGUI::graphicUpdates() {
 
         double max_expected_power = max_batt_voltage * max_expected_amps;
         // Χρήση της mapValue απευθείας, χωρίς function pointers
-        double power_gauge_pct = mapValue(tel.current_power, 0.0, max_expected_power, 0.0, 100.0);
+        double power_gauge_pct = backend_handler->mapValue(tel.current_power, 0.0, max_expected_power, 0.0, 100.0);
 
         if (power_gauge_pct > 100.0) power_gauge_pct = 100.0;
         if (power_gauge_pct < 0.0) power_gauge_pct = 0.0;
@@ -625,10 +617,10 @@ void GcsGUI::updateUIFromTelemetry(QMap<QString, double> values) {
         this->updateSurfaces();
 
         // Υπολογισμός οπτικών γωνιών για το 3D Model
-        double aileron_Visual_Angle = mapValue(surfaces.left_aileron.current_value, surfaces.left_aileron.low_pwm_value, surfaces.left_aileron.high_pwm_value, -30.0, 30.0);
-        double elevator_Visual_Angle = mapValue(surfaces.elevator.current_value, surfaces.elevator.low_pwm_value, surfaces.elevator.high_pwm_value, -30.0, 30.0);
-        double throttlePct = mapValue(surfaces.motor.current_value, surfaces.motor.low_pwm_value, surfaces.motor.high_pwm_value, 0.0, 100.0);
-        double rudder_Visual_Angle = mapValue(surfaces.rudder.current_value, surfaces.rudder.low_pwm_value, surfaces.rudder.high_pwm_value, -30.0, 30.0);
+        double aileron_Visual_Angle = backend_handler->mapValue(surfaces.left_aileron.current_value, surfaces.left_aileron.low_pwm_value, surfaces.left_aileron.high_pwm_value, -30.0, 30.0);
+        double elevator_Visual_Angle = backend_handler->mapValue(surfaces.elevator.current_value, surfaces.elevator.low_pwm_value, surfaces.elevator.high_pwm_value, -30.0, 30.0);
+        double throttlePct = backend_handler->mapValue(surfaces.motor.current_value, surfaces.motor.low_pwm_value, surfaces.motor.high_pwm_value, 0.0, 100.0);
+        double rudder_Visual_Angle = backend_handler->mapValue(surfaces.rudder.current_value, surfaces.rudder.low_pwm_value, surfaces.rudder.high_pwm_value, -30.0, 30.0);
 
         tel.current_throttle = throttlePct;
         this->setThrottle(throttlePct);
@@ -1215,7 +1207,7 @@ void GcsGUI::setThrottle(qreal val)
 void GcsGUI::setBatteryPercentage() {
 	auto& tel = backend_handler->tel;
 
-    int batt_pct = (int)mapValue(tel.main_batt_voltage, min_batt_voltage, max_batt_voltage, 0.0, 100.0);
+    int batt_pct = (int)backend_handler->mapValue(tel.main_batt_voltage, min_batt_voltage, max_batt_voltage, 0.0, 100.0);
     if (batt_pct > 100) batt_pct = 100;
     if (batt_pct < 0) batt_pct = 0;
     static int last_batt_pct = -1;

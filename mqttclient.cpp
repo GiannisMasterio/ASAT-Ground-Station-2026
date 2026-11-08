@@ -1,4 +1,4 @@
-#include "mqttclient.h"
+#include "MqttClient.h"
 #include <QDebug>
 #include <QtMqtt/QMqttTopicName> // Χρειάζεται για το publish
 #include <QSslConfiguration>

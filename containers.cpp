@@ -1,5 +1,5 @@
-#include "containers.h"
-#include "constants.h"
+#include "Containers.h"
+#include "Constants.h"
 #include "hudwidgets.h"
 #include <QDebug>
 #include <QVBoxLayout>

@@ -5,12 +5,11 @@
 #include <QTimer>
 #include <QtSerialPort/QSerialPort>
 #include <QFile>
-#include "constants.h"
-#include "mqttclient.h"
-#include "containers.h"
-#include "graphcontainer.h"
+#include "Constants.h"
+#include "MqttClient.h"
+#include "Containers.h"
+#include "GraphContainer.h"
 #include <qframe.h>
-#include "QcustomPlot.h"
 #include "BatteryWidget.h"
 #include "BackendHandler.h"
 #include <Qt3DExtras/Qt3DWindow>

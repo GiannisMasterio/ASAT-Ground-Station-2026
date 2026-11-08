@@ -2,8 +2,8 @@
 #ifndef VARSTATE_H
 #define VARSTATE_H
 
-#include "constants.h"
-#include "mqttclient.h"
+#include "Constants.h"
+#include "MqttClient.h"
 
 struct TelemetryData {
     double main_batt_voltage = 0.0;
@@ -60,7 +60,4 @@ struct MqttConfig {
     QString mqtt_broker = DEFAULT_MQTT_BROKER;
     QByteArray last_mqtt_data;
 };
-
-double mapValue(double x, double in_min, double in_max, double out_min, double out_max);
-
 #endif

@@ -13,6 +13,7 @@ class QPushButton;
 class QSlider;
 class QLabel;
 class QDialog;
+class QPlainTextEdit;
 
 class BackendHandler : public QObject
 {
@@ -52,6 +53,9 @@ public:
     void logToFile(bool status);
 
     double getThrottlePercentage(int current_throttle);
+
+    double mapValue(double x, double in_min, double in_max,
+        double out_min, double out_max);
 
     QTimer* auto_mode_timer = nullptr;
 
@@ -98,6 +102,7 @@ public:
     std::mt19937 rng{ std::random_device{}() };
 
     QString com_port;
+    QPlainTextEdit* terminalLog = nullptr;
 
 protected:
 
