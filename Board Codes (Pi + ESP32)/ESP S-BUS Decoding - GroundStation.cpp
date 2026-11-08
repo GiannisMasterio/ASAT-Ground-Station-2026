@@ -14,6 +14,7 @@ const char* ssid = "Masterio";
 const char* password = "masterakhs95";
 const char* mqtt_server = "10.22.135.123";
 const int   mqtt_port = 1883;
+const char* mqtt_topic = "daidalus/telemetry/state";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -102,7 +103,7 @@ void loop() {
              telemetry.GSpeed, telemetry.SatCount, telemetry.Latitude, telemetry.Longitude,
              telemetry.Altitude, telemetry.HomeDist, telemetry.PiTemp);
 
-    client.publish("daidalus/telemetry/state", jsonPayload);
+    client.publish(mqtt_topic, jsonPayload);
     
     // Εμφάνιση μόνο μιας μικρής επιβεβαίωσης στο Serial για το LoRa
     Serial.printf("📡 [LoRa RX] Volts: %.2fV | Alt: %.1fm -> MQTT OK\n", telemetry.MainVoltage, telemetry.Altitude);
