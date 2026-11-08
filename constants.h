@@ -32,7 +32,7 @@ constexpr const char* EARTH_ICONPATH = "./assets/EarthIcon.png";
 
 constexpr const char* DEFAULT_MQTT_BROKER = "127.0.0.1";
 constexpr const char* DEFAULT_MQTT_SEND_TOPIC = "thrust-toesp";
-constexpr const char* DEFAULT_MQTT_RECEIVE_TOPIC = "daidalus/telemetry/state";
+constexpr const char* DEFAULT_MQTT_RECEIVE_TOPIC = "thrust-fromesp";
 constexpr int DEFAULT_MQTT_PORT = 1883;
 
 constexpr int MQTT_DELAY = 10; // ms

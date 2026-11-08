@@ -54,8 +54,8 @@ public:
 
     double getThrottlePercentage(int current_throttle);
 
-    double mapValue(double x, double in_min, double in_max,
-        double out_min, double out_max);
+    double mapValue(double x, double in_min, double in_max, double out_min, double out_max);
+        
 
     QTimer* auto_mode_timer = nullptr;
 

@@ -315,7 +315,7 @@ private:
     bool wireless_source = true;
     bool serial_source = true;
     bool running = true;
-    bool process_begin = false;
+    bool process_begin = true;
     bool unsaved_changes = false;
     bool armed = false;
 

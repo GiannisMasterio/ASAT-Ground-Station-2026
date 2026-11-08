@@ -50,6 +50,7 @@ GcsGUI::GcsGUI(QWidget* parent) : QMainWindow(parent)
     connect(graphic_timer, &QTimer::timeout, this, &GcsGUI::graphicUpdates);
     connect(mqtt_data_timer, &QTimer::timeout, backend_handler, &BackendHandler::updateMqttData);
     connect(backend_handler, &BackendHandler::telemetryParsed, this, &GcsGUI::updateUIFromTelemetry);
+    connect(backend_handler, &BackendHandler::telemetryUpdated, this, &GcsGUI::updateBottomToolbar);
 
     mqtt_data_timer->start(MQTT_DELAY);
     backend_handler->start_mqtt();
