@@ -1,6 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
 
 // --- ΡΥΘΜΙΣΕΙΣ PINS & ΣΕΙΡΙΑΚΩΝ ---
 #define LORA_RX_PIN 16
@@ -8,16 +6,6 @@
 
 #define SBUS_RX_PIN 27 // Σύνδεσε το καλώδιο Signal του δέκτη (SBUS) στο pin 27
 #define SBUS_TX_PIN 26 // Δεν χρησιμοποιείται αλλά χρειάζεται στη δήλωση
-
-// --- ΡΥΘΜΙΣΕΙΣ WIFI & MQTT ---
-const char* ssid = "Masterio";
-const char* password = "masterakhs95";
-const char* mqtt_server = "10.22.135.123";
-const int   mqtt_port = 1883;
-const char* mqtt_topic = "daidalus/telemetry/state";
-
-WiFiClient espClient;
-PubSubClient client(espClient);
 
 // --- ΜΕΤΑΒΛΗΤΕΣ LORA ---
 struct __attribute__((packed)) TelemetryPacket {
@@ -42,27 +30,6 @@ uint16_t channels[16];
 int pwm[16];
 int byteIndex = 0;
 
-void setup_wifi() {
-  delay(10);
-  Serial.printf("\nΣύνδεση στο WiFi: %s", ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\n✅ WiFi Συνδέθηκε!");
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    if (client.connect("ESP32_Ground_Station")) {
-      Serial.println("✅ Συνδέθηκε στο MQTT Broker!");
-    } else {
-      delay(5000);
-    }
-  }
-}
-
 void setup() {
   // 1. USB Serial Monitor
   Serial.begin(115200);
@@ -74,20 +41,11 @@ void setup() {
   Serial1.begin(100000, SERIAL_8E2, SBUS_RX_PIN, SBUS_TX_PIN, true);
   
   delay(1000);
-  setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
-
   Serial.println("🚀 ESP32 Ground Station Έτοιμο (LoRa + SBUS)!");
 }
 
 void loop() {
-  // --- 1. ΔΙΑΤΗΡΗΣΗ MQTT ---
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
-
-  // --- 2. ΛΗΨΗ & PUBLISH LORA ---
+  // --- 1. ΛΗΨΗ & PRINT LORA ---
   if (Serial2.available() >= sizeof(TelemetryPacket)) {
     Serial2.readBytes((uint8_t*)&telemetry, sizeof(TelemetryPacket));
 
@@ -103,13 +61,14 @@ void loop() {
              telemetry.GSpeed, telemetry.SatCount, telemetry.Latitude, telemetry.Longitude,
              telemetry.Altitude, telemetry.HomeDist, telemetry.PiTemp);
 
-    client.publish(mqtt_topic, jsonPayload);
+    // Αντί για MQTT publish, το τυπώνουμε απευθείας στη Σειριακή
+    Serial.println(jsonPayload);
     
     // Εμφάνιση μόνο μιας μικρής επιβεβαίωσης στο Serial για το LoRa
-    Serial.printf("📡 [LoRa RX] Volts: %.2fV | Alt: %.1fm -> MQTT OK\n", telemetry.MainVoltage, telemetry.Altitude);
+    Serial.printf("📡 [LoRa RX] Volts: %.2fV | Alt: %.1fm -> Serial OK\n", telemetry.MainVoltage, telemetry.Altitude);
   }
 
-  // --- 3. ΛΗΨΗ & ΑΠΟΚΩΔΙΚΟΠΟΙΗΣΗ SBUS ---
+  // --- 2. ΛΗΨΗ & ΑΠΟΚΩΔΙΚΟΠΟΙΗΣΗ SBUS ---
   if (Serial1.available() > 0) {
     uint8_t incomingByte = Serial1.read();
     
