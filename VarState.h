@@ -36,7 +36,7 @@ struct PlaneControlSurfaces {
     ControlSurfaces left_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 };
     ControlSurfaces right_aileron{ 1, 988, 2012, 0, -45.0, 45.0, 0.0 };
     ControlSurfaces elevator{ 2, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
-    ControlSurfaces motor{ 3, 988, 2012, 0 , -45.0, 45.0, 0.0 };
+    ControlSurfaces motor{ 3, 1130, 2000, 0 , -45.0, 45.0, 0.0 };
     ControlSurfaces rudder{ 4, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
     ControlSurfaces left_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
     ControlSurfaces right_flap{ 5, 988, 2012, 0 , -45.0, 45.0 , 0.0 };
@@ -45,9 +45,10 @@ struct PlaneControlSurfaces {
     ControlSurfaces arm_status_switch{ 9, 988, 2012,0 };
 };
 
-
 struct CalibrationConfig {
-
+    double min_batt_voltage = 9.0;
+    double max_batt_voltage = 12.6;  // 9.0V άδεια - 12.6V γεμάτη
+    double max_expected_amps = 30.0;
     int min_throttle = MIN_THROTTLE;
     int max_throttle = MAX_THROTTLE;
 };

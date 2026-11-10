@@ -149,10 +149,6 @@ public:
     AudioHandler* audio_handler = nullptr;
     QTimer* auto_mode_timer = nullptr;
 
-    double min_batt_voltage = 9.0;
-    double max_batt_voltage = 12.6;  // 9.0V άδεια - 12.6V γεμάτη
-    double max_expected_amps = 30.0;
-
     int audio_click_sfx_volume = 100;
 
     // FLAGS

@@ -46,8 +46,7 @@ BackendHandler::BackendHandler(QObject* parent, QObject* defaultValue) :
 }
 
 // Telemetry Functions
-void BackendHandler::receiveTelemetry(const QString& data, QString source) {
-    if (source != selected_data_source) return;
+void BackendHandler::receiveTelemetry(const QString& data) {
 
     QString cleanData = data.trimmed().replace(" ", "");
     QMap<QString, double> value_keeper;
@@ -281,7 +280,7 @@ void BackendHandler::onMqttMessageReceived(const QString& data) {
 
 void BackendHandler::updateMqttData() {
     if (!mqttcfg.last_mqtt_data.isEmpty()) {
-        receiveTelemetry(QString::fromUtf8(mqttcfg.last_mqtt_data), "MQTT");
+		receiveTelemetry(QString::fromUtf8(mqttcfg.last_mqtt_data));
         mqttcfg.last_mqtt_data.clear();
     }
 }
@@ -372,7 +371,7 @@ void BackendHandler::readSerialData() {
                 process_begin = true;
             }
             // ΟΧΙ terminalLog εδώ
-            receiveTelemetry(serialData, "SERIAL");
+            receiveTelemetry(serialData);
         }
     }
 }

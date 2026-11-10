@@ -40,7 +40,6 @@ public:
     bool isSoundPlaying(QString audio);
     void setSoundStatus(bool sound_status);
 
-
     void start_mqtt();
     void disconnect_mqtt();
     void change_mqtt_topic();
@@ -56,12 +55,9 @@ public:
 
     double mapValue(double x, double in_min, double in_max, double out_min, double out_max);
         
-
     QTimer* auto_mode_timer = nullptr;
 
     QStringList baudrates = { "300", "1200", "2400", "4800", "9600", "14400", "19200", "38400", "57600", "115200" };
-
-    QString selected_propeller;
 
     bool experiment_running = false;
     bool log_only_during_experiment = true;
@@ -74,8 +70,6 @@ public:
     QString save_file_path = "ASAT ThrustStandSmart Save.txt";
     QFile* log_file = nullptr;
     QFile* save_file = nullptr;
-
-    QString selected_data_source = "MQTT";
 
     int logIntervalMs = 500;
 
@@ -161,7 +155,7 @@ signals:
     void loggingStateChanged(bool logging);
 
 public slots:
-    void receiveTelemetry(const QString& data, QString source);
+    void receiveTelemetry(const QString& data);
     void updateTelemetry(QMap<QString, double> value_keeper);
     void updateMqttSendTopic(const QString& newTopic);
 

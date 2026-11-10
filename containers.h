@@ -4,11 +4,12 @@
 #include <QWidget>
 #include <QFrame>
 #include "HudWidgets.h"
+
 class QLabel;
 class QProgressBar;
 class QCheckBox;
 class QPushButton;
-class GcsGUI;
+class BackendHandler;
 
 class Containers : public QFrame
 {
@@ -16,10 +17,7 @@ class Containers : public QFrame
 
 public:
     explicit Containers(const QString& title, int titleSize, const QString& titleColor,
-        double initialValue, bool hasBar,  GcsGUI* guiMaster,
-        QWidget* parent = nullptr);
-
-
+        double initialValue, bool hasBar, QWidget* parent = nullptr, BackendHandler* backendHandler = nullptr);
     ~Containers() override = default;
 
 
@@ -49,11 +47,10 @@ private:
     QWidget* control_frame = nullptr;
     QCheckBox* toggle_switch = nullptr;
     QPushButton* slider_opener_button = nullptr;
-
-    GcsGUI* m_guiMaster;
     
     Gauge* mainGauge = nullptr; 
     BigBatteryWidget* bigBatteryWidget = nullptr;
+	BackendHandler* backend_handler = nullptr;
 
     void checkBoundsAndSetColor(double currentValue);
     void design();

@@ -1,17 +1,16 @@
 #include "Containers.h"
 #include "Constants.h"
-#include "hudwidgets.h"
-#include <QDebug>
+#include "HudWidgets.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QProgressBar>
-#include "GcsGUI.h"
 #include <QCheckBox>
 #include <QPushButton>
 #include <QFont>
 #include <QtMath>
 #include <QGraphicsDropShadowEffect>
+#include "BackendHandler.h"
 
 namespace {
 
@@ -51,17 +50,9 @@ namespace {
 }
 
 Containers::Containers(const QString& title, int titleSize, const QString& titleColor,
-    double initialValue, bool hasBar, GcsGUI* guiMaster,
-    QWidget* parent)
-    : QFrame(parent),
-    title_text(title),
-    title_label_size(titleSize),
-    title_label_color(titleColor),
-    value(initialValue),
-    unit(units_map.value(title)),
-    has_bar(hasBar),
-    quantity(actual_quantity.value(title)),
-    m_guiMaster(guiMaster)
+    double initialValue, bool hasBar, QWidget* parent, BackendHandler* backendHandler) 
+    : QFrame(parent), title_text(title), title_label_size(titleSize), title_label_color(titleColor),
+    value(initialValue), unit(units_map.value(title)), has_bar(hasBar), quantity(actual_quantity.value(title)), backend_handler(backendHandler)
 {
     low_bound = bounds_map.value(quantity).first;
     high_bound = bounds_map.value(quantity).second;
@@ -81,19 +72,15 @@ Containers::Containers(const QString& title, int titleSize, const QString& title
 
     setObjectName("Containers");
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(
-        "QFrame#Containers {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        "              stop:0 rgba(22,32,52,215), stop:1 rgba(9,15,29,225));"
-        "  border: 1px solid rgba(79,176,255,70);"
-        "  border-radius: 22px;"
-        "}");
-
+    setStyleSheet( "QFrame#Containers {" "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+        " stop:0 rgba(22,32,52,215), stop:1 rgba(9,15,29,225));" "  border: 1px solid rgba(79,176,255,70);"
+        " border-radius: 22px;" "}");
+        
     design();
 }
 
 void Containers::design() {
-
+    const auto& surf = backend_handler->surfaces;
     QVBoxLayout* frameLayout = new QVBoxLayout(this);
     frameLayout->setContentsMargins(24, 18, 24, 18);
     frameLayout->setSpacing(10);
@@ -106,8 +93,8 @@ void Containers::design() {
     title_label = new QLabel(title_text.toUpper(), this);
     title_label->setAlignment(Qt::AlignCenter);
     title_label->setFont(titleFont);
-    title_label->setStyleSheet(QString("background: transparent; border: none; color: %1;")
-        .arg(title_label_color == "white" ? QString(UNIT) : title_label_color));
+    title_label->setStyleSheet(QString("background: transparent; border: none; color: %1;").arg(title_label_color == "white" ? QString(UNIT) : title_label_color));
+       
     frameLayout->addWidget(title_label, 0, Qt::AlignHCenter);
 
     // ---- Μεγάλη τιμή (όχι για gauge κάρτες)
@@ -126,12 +113,18 @@ void Containers::design() {
         frameLayout->addWidget(value_label, 0, Qt::AlignHCenter);
     }
 
-    // ---- Γραφικό
     if (isGauge) {
+
         mainGauge = new Gauge(this);
-        mainGauge->setValue(value);
+        if (quantity == "Throttle") {
+            // Μετατροπή της τιμής PWM του κινητήρα σε ποσοστό 0-100%
+            double throttle_pct = mapValueLocal(value, surf.motor.low_pwm_value, surf.motor.high_pwm_value, 0.0, 100.0);
+            if (mainGauge) mainGauge->setValue(throttle_pct);
+        }else  mainGauge->setValue(value);
+        
         frameLayout->addWidget(mainGauge, 1);
     }
+
     else if (!has_bar) {
         bigBatteryWidget = new BigBatteryWidget(this);
         frameLayout->addWidget(bigBatteryWidget, 0, Qt::AlignHCenter);
@@ -177,6 +170,8 @@ void Containers::checkBoundsAndSetColor(double currentValue) {
 }
 
 void Containers::updateData(double newValue) {
+    const auto& cal = backend_handler->cal;
+    const auto& surf = backend_handler->surfaces; // Φέρνουμε τα δεδομένα των surfaces για το Motor
 
     value = newValue;
 
@@ -184,12 +179,17 @@ void Containers::updateData(double newValue) {
         value_label->setText(valueHtml(value, unit));
     }
 
-    if (quantity == "Throttle" || quantity == "Power") {
+    // Διαχωρισμός Throttle και Power (Το Power έρχεται ήδη 0-100% από το GcsGUI)
+    if (quantity == "Throttle") {
+        // Μετατροπή της τιμής PWM του κινητήρα σε ποσοστό 0-100%
+        double throttle_pct = mapValueLocal(value, surf.motor.low_pwm_value, surf.motor.high_pwm_value, 0.0, 100.0);
+        if (mainGauge) mainGauge->setValue(throttle_pct);
+    }
+    else if (quantity == "Power") {
         if (mainGauge) mainGauge->setValue(value);
     }
     else if (!has_bar && bigBatteryWidget) {
-        bigBatteryWidget->setPercentage(
-            mapValueLocal(value, m_guiMaster->min_batt_voltage, m_guiMaster->max_batt_voltage, 0.0, 100.0));
+        bigBatteryWidget->setPercentage(mapValueLocal(value, cal.min_batt_voltage, cal.max_batt_voltage, 0.0, 100.0));
     }
 
     if (has_bar && progress_bar) {

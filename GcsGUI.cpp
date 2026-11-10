@@ -160,12 +160,12 @@ void GcsGUI::createMainScene() {
 
     const int TITLE_SIZE = 18;
 
-    main_batt_currentGUI = new Containers("MainBatt Current", TITLE_SIZE, "white", tel.main_batt_current, true, this, topSection);
-    main_batt_voltageGUI = new Containers("MainBatt Voltage", TITLE_SIZE, "white", tel.main_batt_voltage, false, this, topSection);
-    servo_batt_currentGUI = new Containers("SBatt Current", TITLE_SIZE, "white", tel.servo_batt_current, true, this, topSection);
-    servo_batt_voltageGUI = new Containers("SBatt Voltage", TITLE_SIZE, "white", tel.servo_batt_voltage, false, this, topSection);
-    instantpowerGUI = new Containers("Instant Power", TITLE_SIZE, "white", tel.current_power, false, this, topSection);
-    instantthrottleGUI = new Containers("Instant Throttle", TITLE_SIZE, "white", tel.current_throttle, false, this, topSection);
+    main_batt_currentGUI = new Containers("MainBatt Current", TITLE_SIZE, "white", tel.main_batt_current, true, topSection,backend_handler);
+    main_batt_voltageGUI = new Containers("MainBatt Voltage", TITLE_SIZE, "white", tel.main_batt_voltage, false, topSection,backend_handler);
+    servo_batt_currentGUI = new Containers("SBatt Current", TITLE_SIZE, "white", tel.servo_batt_current, true, topSection,backend_handler);
+    servo_batt_voltageGUI = new Containers("SBatt Voltage", TITLE_SIZE, "white", tel.servo_batt_voltage, false, topSection,backend_handler);
+    instantpowerGUI = new Containers("Instant Power", TITLE_SIZE, "white", tel.current_power, false,  topSection,backend_handler);
+    instantthrottleGUI = new Containers("Instant Throttle", TITLE_SIZE, "white", tel.current_throttle, false, topSection,backend_handler);
 
     // Δύο στήλες, χωρίς την ενδιάμεση "κενή" στήλη
     gridLayout->addWidget(main_batt_currentGUI, 0, 0);
@@ -522,6 +522,7 @@ void GcsGUI::graphicUpdates() {
 
     auto& tel = backend_handler->tel;
     auto& surf = backend_handler->surfaces;
+	auto& cal = backend_handler->cal;
 
     if (batteryIndicator) {
         setBatteryPercentage();
@@ -541,7 +542,7 @@ void GcsGUI::graphicUpdates() {
 
     if (current_scene == "MAIN") {
 
-        double max_expected_power = max_batt_voltage * max_expected_amps;
+        double max_expected_power = cal.max_batt_voltage * cal.max_expected_amps;
         // Χρήση της mapValue απευθείας, χωρίς function pointers
         double power_gauge_pct = backend_handler->mapValue(tel.current_power, 0.0, max_expected_power, 0.0, 100.0);
 
@@ -1207,8 +1208,9 @@ void GcsGUI::setThrottle(qreal val)
 
 void GcsGUI::setBatteryPercentage() {
 	auto& tel = backend_handler->tel;
+	auto& cal = backend_handler->cal;
 
-    int batt_pct = (int)backend_handler->mapValue(tel.main_batt_voltage, min_batt_voltage, max_batt_voltage, 0.0, 100.0);
+    int batt_pct = (int)backend_handler->mapValue(tel.main_batt_voltage, cal.min_batt_voltage, cal.max_batt_voltage, 0.0, 100.0);
     if (batt_pct > 100) batt_pct = 100;
     if (batt_pct < 0) batt_pct = 0;
     static int last_batt_pct = -1;
@@ -1228,6 +1230,7 @@ void GcsGUI::setBatteryPercentage() {
 void GcsGUI::setupSettingsFields() {
     auto& surf = backend_handler->surfaces;
     auto& mqtt = backend_handler->mqttcfg;
+	auto& cal = backend_handler->cal; 
 
     settings_fields = QVector<SettingsElements>{
         // --- General / Audio ---
@@ -1240,8 +1243,8 @@ void GcsGUI::setupSettingsFields() {
         SettingsElements(QString("MQTT Broker"), QString(""), QString(""), false, (void*)&mqtt.mqtt_broker, SettingsElements::String),
         SettingsElements(QString("MQTT Port"), QString(""), QString(""), true, (void*)&mqtt.mqtt_port, SettingsElements::Int),
 
-        SettingsElements(QString("Min Battery Voltage"), QString(""), QString(""), true, (void*)&min_batt_voltage, SettingsElements::Double),
-        SettingsElements(QString("Max Battery Voltage"), QString(""), QString(""), true, (void*)&max_batt_voltage, SettingsElements::Double),
+        SettingsElements(QString("Min Battery Voltage"), QString(""), QString(""), true, (void*)&cal.min_batt_voltage, SettingsElements::Double),
+        SettingsElements(QString("Max Battery Voltage"), QString(""), QString(""), true, (void*)&cal.max_batt_voltage, SettingsElements::Double),
 
         // --- PWM Bounds (Διορθωμένα Pointers) ---
         SettingsElements(QString("Min Motor (us)"), QString(""), QString(""), true, (void*)&surf.motor.low_pwm_value, SettingsElements::Int),
