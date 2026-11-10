@@ -52,20 +52,18 @@ void loop() {
     // Καθαρισμός buffer 
     while(Serial2.available()) Serial2.read();
 
-    char jsonPayload[512];
-    snprintf(jsonPayload, sizeof(jsonPayload),
-             "{\"MainVoltage\":%.2f,\"MainCurrent\":%.2f,\"SVoltage\":%.2f,\"SCurrent\":%.2f,"
-             "\"GSpeed\":%.1f,\"SatCount\":%d,\"Latitude\":%.6f,\"Longitude\":%.6f,"
-             "\"Altitude\":%.1f,\"HomeDist\":%.1f,\"PiTemp\":%.1f}",
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+             "MV:%.2f,MC:%.2f,SV:%.2f,SC:%.2f,GS:%.1f,SAT:%d,LAT:%.6f,LON:%.6f,ALT:%.1f,HD:%.1f,PT:%.1f",
              telemetry.MainVoltage, telemetry.MainCurrent, telemetry.SVoltage, telemetry.SCurrent,
              telemetry.GSpeed, telemetry.SatCount, telemetry.Latitude, telemetry.Longitude,
              telemetry.Altitude, telemetry.HomeDist, telemetry.PiTemp);
 
-    // Αντί για MQTT publish, το τυπώνουμε απευθείας στη Σειριακή
-    Serial.println(jsonPayload);
+    // Τυπώνει στη Σειριακή για το GUI
+    Serial.println(payload);
     
     // Εμφάνιση μόνο μιας μικρής επιβεβαίωσης στο Serial για το LoRa
-    Serial.printf("📡 [LoRa RX] Volts: %.2fV | Alt: %.1fm -> Serial OK\n", telemetry.MainVoltage, telemetry.Altitude);
+    Serial.printf("📡 [LoRa RX] Volts: %.2fV");
   }
 
   // --- 2. ΛΗΨΗ & ΑΠΟΚΩΔΙΚΟΠΟΙΗΣΗ SBUS ---
