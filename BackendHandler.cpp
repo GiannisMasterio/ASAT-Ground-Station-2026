@@ -66,6 +66,8 @@ void BackendHandler::receiveTelemetry(const QString& data) {
     if (!value_keeper.isEmpty()) {
         updateTelemetry(value_keeper);
     }
+
+    logToFile(true);
 }
 
 void BackendHandler::updateTelemetry(QMap<QString, double> value_keeper) {
@@ -120,9 +122,7 @@ void BackendHandler::initLogFile() {
     QFile file(fullPath);
 
     if (!file.exists()) {
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&file);
-            out << "                     Timestamp                  Thrust (N)               Torque (N*m)               Voltage (V)                Current (A)               RPM               Throttle (%)                  Power (W)              Propeller Name            AOA (deg)           Airspeed (m/s)\n";
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {  
             file.close();
             qDebug() << "Created initial log file:" << fullPath;
         }
@@ -193,7 +193,9 @@ void BackendHandler::openLogFile() {
     QString fullFilePath = log_file_path;
 
     if (!QFileInfo(fullFilePath).isAbsolute() || fullFilePath.isEmpty()) {
-        fullFilePath = QCoreApplication::applicationDirPath() + QDir::separator() + "ASAT ThrustStand Records.csv";
+        // ΛΑΘΟΣ: fullFilePath = QCoreApplication::applicationDirPath() + QDir::separator() + "ASAT ThrustStand Records.csv";
+        // ΣΩΣΤΟ:
+        fullFilePath = QCoreApplication::applicationDirPath() + QDir::separator() + log_file_path;
     }
 
     if (!QFile::exists(fullFilePath)) {

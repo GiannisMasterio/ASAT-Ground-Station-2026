@@ -528,7 +528,7 @@ void GcsGUI::graphicUpdates() {
         setBatteryPercentage();
     }
 
-    double currentTime = graphtimeCounter + ((double)GRAPHIC_UPDATES_REFRESH_RATE / 1000.0);
+    double currentTime = graphtimeCounter + (static_cast<double>(GRAPHIC_UPDATES_REFRESH_RATE) / 1000.0);
     graphtimeCounter = currentTime;
 
     auto appendData = [&](QVector<double>& buffer, double value) {
@@ -585,13 +585,10 @@ void GcsGUI::graphicUpdates() {
 }
 
 void GcsGUI::updateUIFromTelemetry(QMap<QString, double> values) {
-    // Τα τηλεμετρικά δεδομένα (altitude, voltage κλπ) έχουν ήδη ενημερωθεί 
-    // στο backend_handler->tel από την BackendHandler::updateTelemetry.
 
     auto& tel = backend_handler->tel;
     auto& surfaces = backend_handler->surfaces; 
 
-    // Ενημέρωση των properties για το QML / 3D
     setLatitude(tel.latitude);
     setLongitude(tel.longitude);
 
@@ -848,7 +845,7 @@ void GcsGUI::updateBottomToolbar() {
     if (armed) status_icon_path = ARMED_ICONPATH;
     else status_icon_path = DISARMED_ICONPATH;
 
-    if (write_logs) logging_icon_path = LOGGING_ON_ICONPATH;
+    if (backend_handler->write_logs) logging_icon_path = LOGGING_ON_ICONPATH;
     else logging_icon_path = LOGGING_OFF_ICONPATH;
 
     if (unsaved_changes) save_icon_path = SAVEICONPATH;
@@ -1236,7 +1233,7 @@ void GcsGUI::setupSettingsFields() {
         // --- General / Audio ---
         SettingsElements(QString("Sound"), QString(""), QString(""), false, (void*)&this->soundOn, SettingsElements::Bool),
         SettingsElements(QString("Audio Click Sound Volume"), QString(""), QString(""), true, (void*)&this->audio_click_sfx_volume, SettingsElements::Int),
-        SettingsElements(QString("Write Logs"), QString(""), QString(""), false, (void*)&this->write_logs, SettingsElements::Bool),
+        SettingsElements(QString("Write Logs"), QString(""), QString(""), false, (void*)&backend_handler->write_logs, SettingsElements::Bool),
 
         // --- MQTT (Διορθωμένα Pointers) ---
         SettingsElements(QString("MQTT Topic"), QString(""), QString(""), false, (void*)&mqtt.mqtt_receive_topic, SettingsElements::String),
@@ -1483,11 +1480,11 @@ void GcsGUI::chooseSettings() {
                         unsaved_changes = true;
                         *(static_cast<bool*>(field.targetVar)) = new_val;
 
-                        if (field.labeltext == "Write Logs") this->write_logs = new_val;
+                        if (field.labeltext == "Write Logs") backend_handler->write_logs = new_val;
                     }
                 }
             }
-
+                
             else if (field.type == SettingsElements::Int) {
                 QLineEdit* le = qobject_cast<QLineEdit*>(field.entry);
                 if (le) {
@@ -1545,7 +1542,12 @@ void GcsGUI::chooseSettings() {
 }
 
 void GcsGUI::loadSettings() {
-    QFile file(save_file_path);
+    QString fullSavePath = save_file_path;
+    if (!QFileInfo(fullSavePath).isAbsolute()) {
+        fullSavePath = QCoreApplication::applicationDirPath() + QDir::separator() + save_file_path;
+    }
+
+    QFile file(fullSavePath);
 
     if (!file.exists()) {
         qDebug() << "No settings file found. Using defaults.";
@@ -1609,8 +1611,13 @@ void GcsGUI::saveSettings() {
 
     int label_width = 30;
 
+    QString fullSavePath = save_file_path;
+    if (!QFileInfo(fullSavePath).isAbsolute()) {
+        fullSavePath = QCoreApplication::applicationDirPath() + QDir::separator() + save_file_path;
+    }
+
     if (save_file == nullptr) {
-        save_file = new QFile(save_file_path, this);
+        save_file = new QFile(fullSavePath, this);
 
         if (!save_file->open(QIODevice::Append | QIODevice::Text)) {
             delete save_file;

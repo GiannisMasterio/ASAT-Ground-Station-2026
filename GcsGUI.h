@@ -245,21 +245,13 @@ private:
     Containers* instantpowerGUI = nullptr;
 
     MqttClient* mqtt_client = nullptr;
-    QFile* log_file = nullptr;
+    
     QFile* save_file = nullptr;
 
     double graphtimeCounter = 0.0;
 
-    // --- Strings & Collections ---
-    const QStringList LOG_HEADERS = {
-        "Timestamp", "Armed_State", "MainVoltage (V)", "MainCurrent (A)", "Power (W)", "ServoVoltage (V)", "ServoCurrent (A)", "Altitude (m)", "GroundSpeed (km/h)", "DistToHome (m)"
-        ,"GPS_Latitude", "GPS_Longitude", "PiTemp (C)", "GPS_Sat_Count", "Throttle (%)", "RC_Motor (us)", "RC_Rudder (us)", "RC_Elevator (us)", "RC_Ail_L (us)", "RC_Ail_R (us)", "RC_Flap_L (us)", "RC_Flap_R (us)", "LandingGear1 (us)",
-        "LandingGear2 (us)"
-    };
-
     QString mqtt = "MQTT";
     QString serial = "SERIAL";
-    QString selected_source = mqtt;
     
     QString scene_icon_path = PLANEICONPATH;
     QString status_icon_path = DISARMED_ICONPATH;
